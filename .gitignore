@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv_test/
+
+
+# PC 客户端运行时生成的本地状态
+client/pc/config.json
+
+
+# Android / Gradle
+client/android/.gradle/
+client/android/build/
+client/android/app/build/
+client/android/local.properties
+client/android/.idea/
+client/android/*.iml
+client/android/captures/

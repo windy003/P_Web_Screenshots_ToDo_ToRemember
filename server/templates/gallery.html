@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ key }} - 图片浏览</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top">
+    <h1>{{ key }}({{ count }} 张,按从旧到新排序)</h1>
+    <a class="back" href="{{ url_for('index') }}">&larr; 返回</a>
+  </header>
+  {% if images %}
+  <div class="gallery">
+    {% for name in images %}
+      <a class="thumb" href="{{ url_for('view_image', key=key, index=loop.index0) }}">
+        <img src="{{ url_for('media', key=key, filename=name) }}" loading="lazy" alt="{{ name }}">
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-hint">这个文件夹里还没有图片。</div>
+  {% endif %}
+</body>
+</html>

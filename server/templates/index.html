@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>图片文件夹</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top">
+    <h1>图片文件夹</h1>
+  </header>
+  <div class="folder-list">
+    {% for f in folders %}
+      <a class="folder-card {{ 'disabled' if not f.configured else '' }}" href="{{ url_for('browse', key=f.key) if f.configured else '#' }}">
+        <div class="name">{{ f.key }}</div>
+        <div class="count">{{ f.count }} 张图片{% if not f.configured %} · 未配置{% endif %}</div>
+      </a>
+    {% endfor %}
+  </div>
+</body>
+</html>

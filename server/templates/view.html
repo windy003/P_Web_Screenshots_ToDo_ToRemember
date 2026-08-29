@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ key }} - {{ filename }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top">
+    <h1>{{ key }}</h1>
+    <a class="back" href="{{ url_for('browse', key=key) }}">&larr; 返回列表</a>
+  </header>
+  <div class="viewer">
+    <div class="image-wrap">
+      <img src="{{ url_for('media', key=key, filename=filename) }}" alt="{{ filename }}">
+    </div>
+    <div class="nav">
+      {% if prev_index is not none %}
+        <a id="prev-link" href="{{ url_for('view_image', key=key, index=prev_index) }}">&larr; 上一张</a>
+      {% else %}
+        <span class="disabled">&larr; 上一张</span>
+      {% endif %}
+      <span>{{ index + 1 }} / {{ total }}</span>
+      {% if next_index is not none %}
+        <a id="next-link" href="{{ url_for('view_image', key=key, index=next_index) }}">下一张 &rarr;</a>
+      {% else %}
+        <span class="disabled">下一张 &rarr;</span>
+      {% endif %}
+    </div>
+    <div class="index-hint">可以用键盘左右方向键切换</div>
+  </div>
+  <script>
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") {
+        var el = document.getElementById("prev-link");
+        if (el) window.location.href = el.href;
+      } else if (e.key === "ArrowRight") {
+        var el = document.getElementById("next-link");
+        if (el) window.location.href = el.href;
+      }
+    });
+  </script>
+</body>
+</html>
