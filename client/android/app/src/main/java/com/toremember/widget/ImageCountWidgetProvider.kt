@@ -8,52 +8,78 @@ import android.content.Intent
 import android.widget.RemoteViews
 import java.util.concurrent.Executors
 
-/** 显示某个文件夹图片数量的小部件,点击后打开图片浏览页面。 */
+/** 显示"大/小/待"三个分类图片数量的小部件,点击后直接打开编辑设置界面。 */
 class ImageCountWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private val executor = Executors.newCachedThreadPool()
 
+        private fun fetchRowText(context: Context, url: String?): String {
+            if (url.isNullOrBlank()) {
+                return context.getString(R.string.widget_row_empty)
+            }
+            val result = ApiClient.fetchFolderInfo(url)
+            return result?.count ?: context.getString(R.string.widget_load_failed)
+        }
+
+        private fun applyRows(context: Context, views: RemoteViews, big: String, small: String, todo: String) {
+            views.setTextViewText(
+                R.id.widget_count_big,
+                context.getString(R.string.widget_row_format, context.getString(R.string.row_label_big), big)
+            )
+            views.setTextViewText(
+                R.id.widget_count_small,
+                context.getString(R.string.widget_row_format, context.getString(R.string.row_label_small), small)
+            )
+            views.setTextViewText(
+                R.id.widget_count_todo,
+                context.getString(R.string.widget_row_format, context.getString(R.string.row_label_todo), todo)
+            )
+        }
+
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val name = WidgetPrefs.getName(context, appWidgetId) ?: context.getString(R.string.app_name)
-            val url = WidgetPrefs.getUrl(context, appWidgetId)
+            val urlBig = WidgetPrefs.getUrlBig(context, appWidgetId)
+            val urlSmall = WidgetPrefs.getUrlSmall(context, appWidgetId)
+            val urlTodo = WidgetPrefs.getUrlTodo(context, appWidgetId)
 
+            val editIntent = Intent(context, WidgetConfigureActivity::class.java).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val editPendingIntent = PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                editIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val loadingText = context.getString(R.string.widget_loading)
             val loadingViews = RemoteViews(context.packageName, R.layout.widget_image_count)
             loadingViews.setTextViewText(R.id.widget_name, name)
-            loadingViews.setTextViewText(R.id.widget_count, context.getString(R.string.widget_loading))
+            applyRows(
+                context,
+                loadingViews,
+                if (urlBig.isNullOrBlank()) context.getString(R.string.widget_row_empty) else loadingText,
+                if (urlSmall.isNullOrBlank()) context.getString(R.string.widget_row_empty) else loadingText,
+                if (urlTodo.isNullOrBlank()) context.getString(R.string.widget_row_empty) else loadingText
+            )
+            loadingViews.setOnClickPendingIntent(R.id.widget_root, editPendingIntent)
             appWidgetManager.updateAppWidget(appWidgetId, loadingViews)
 
-            if (url.isNullOrBlank()) {
+            if (urlBig.isNullOrBlank() && urlSmall.isNullOrBlank() && urlTodo.isNullOrBlank()) {
                 return
             }
 
             executor.execute {
-                val result = ApiClient.fetchFolderInfo(url)
+                val bigText = fetchRowText(context, urlBig)
+                val smallText = fetchRowText(context, urlSmall)
+                val todoText = fetchRowText(context, urlTodo)
+
                 val views = RemoteViews(context.packageName, R.layout.widget_image_count)
                 views.setTextViewText(R.id.widget_name, name)
-
-                if (result != null) {
-                    views.setTextViewText(
-                        R.id.widget_count,
-                        context.getString(R.string.widget_count_format, result.count)
-                    )
-                    val browseUrl = result.browseUrl ?: url
-                    val intent = Intent(context, GalleryActivity::class.java).apply {
-                        putExtra(GalleryActivity.EXTRA_URL, browseUrl)
-                        putExtra(GalleryActivity.EXTRA_TITLE, name)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    }
-                    val pendingIntent = PendingIntent.getActivity(
-                        context,
-                        appWidgetId,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    views.setOnClickPendingIntent(R.id.widget_count, pendingIntent)
-                    views.setOnClickPendingIntent(R.id.widget_name, pendingIntent)
-                } else {
-                    views.setTextViewText(R.id.widget_count, context.getString(R.string.widget_load_failed))
-                }
+                applyRows(context, views, bigText, smallText, todoText)
+                views.setOnClickPendingIntent(R.id.widget_root, editPendingIntent)
 
                 appWidgetManager.updateAppWidget(appWidgetId, views)
             }

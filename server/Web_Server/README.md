@@ -22,13 +22,23 @@ python -m venv .venv
 
 默认监听 `0.0.0.0:5000`(局域网内其它设备,比如手机,也能通过电脑的局域网 IP 访问)。
 
+## 到期文件夹(Reached_3_Days)
+
+网页/API 显示和浏览的都是每个文件夹下 `Reached_3_Days` 子文件夹里的图片,
+而不是文件夹本身的图片。把图片从原始文件夹挪到 `Reached_3_Days` 是
+`server/Move_To_3_Days_Later_Script` 里的脚本负责的(图片放满 3 天才会被挪过去),
+详见那个文件夹的 README。
+
 ## 接口
 
-- `GET /` 网页首页,显示三个文件夹卡片和各自的图片数量。
+- `GET /` 网页首页,显示三个文件夹卡片和各自(`Reached_3_Days` 里)的图片数量。
 - `GET /api/folders` 返回三个文件夹的 `{key, count, browse_url, configured}` 列表。
 - `GET /api/folders/<key>/count` 返回单个文件夹的图片数量,`key` 是 `Small_To_Remember` / `Large_To_Remember` / `ToDo` 之一。
 - `GET /browse/<key>` 图片网格浏览页,按图片修改时间从旧到新排序。
-- `GET /view/<key>/<index>` 单张图片查看页,支持"上一张/下一张"(也支持键盘左右方向键)。
+- `GET /view/<key>/<index>` 单张图片全屏查看页,支持"上一张/下一张"和"3天后"
+  (点击图片可以显示/隐藏悬浮的操作按钮,也支持键盘左右方向键、空格/Esc)。
 - `GET /media/<key>/<filename>` 图片原始文件。
+- `POST /api/postpone/<key>/<filename>` "3天后"按钮调用的接口:把图片从
+  `Reached_3_Days` 挪回上层文件夹并重置修改时间,相当于延后 3 天再提醒。
 
 PC 托盘客户端和 Android 小部件都是通过 `/api/folders/<key>/count` 拿到数量和浏览地址的。

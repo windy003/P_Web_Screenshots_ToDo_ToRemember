@@ -1,30 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="#1E2128"
-    android:padding="12dp">
+    android:background="#FFFFFF"
+    android:padding="2dp">
 
     <TextView
         android:id="@+id/widget_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#E8E8EA"
-        android:textSize="13sp"
+        android:textColor="#1E2128"
+        android:textSize="7sp"
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/app_name" />
 
     <TextView
-        android:id="@+id/widget_count"
+        android:id="@+id/widget_count_big"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:textColor="#8AB4F8"
-        android:textSize="26sp"
+        android:textColor="#1A73E8"
+        android:textSize="8sp"
         android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="@string/widget_loading" />
+
+    <TextView
+        android:id="@+id/widget_count_small"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#1A73E8"
+        android:textSize="8sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="@string/widget_loading" />
+
+    <TextView
+        android:id="@+id/widget_count_todo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#1A73E8"
+        android:textSize="8sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
         android:text="@string/widget_loading" />
 
 </LinearLayout>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ key }} - {{ filename }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_version }}">
+</head>
+<body class="viewer-body">
+  <div class="viewer-full" id="viewer-full">
+    <img id="viewer-img" src="{{ url_for('media', key=key, filename=filename) }}" alt="{{ filename }}">
+
+    <div class="overlay-controls hidden" id="overlay-controls">
+      <div class="floating-panel" id="floating-panel">
+        <div class="panel-grip"><span></span><span></span><span></span></div>
+
+        <div class="panel-info">
+          <span class="ov-index">{{ index + 1 }} / {{ total }}</span>
+        </div>
+
+        <div class="panel-nav">
+          {% if prev_index is not none %}
+            <a id="prev-link" class="ov-btn icon" href="{{ url_for('view_image', key=key, index=prev_index) }}" aria-label="上一张">&larr;</a>
+          {% else %}
+            <span class="ov-btn icon disabled" aria-label="上一张">&larr;</span>
+          {% endif %}
+
+          {% if next_index is not none %}
+            <a id="next-link" class="ov-btn icon" href="{{ url_for('view_image', key=key, index=next_index) }}" aria-label="下一张">&rarr;</a>
+          {% else %}
+            <span class="ov-btn icon disabled" aria-label="下一张">&rarr;</span>
+          {% endif %}
+        </div>
+
+        <button id="postpone-btn" class="ov-btn postpone full" type="button">3天后</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var overlay = document.getElementById("overlay-controls");
+    var img = document.getElementById("viewer-img");
+    var panel = document.getElementById("floating-panel");
+
+    img.addEventListener("click", function () {
+      overlay.classList.toggle("hidden");
+    });
+
+    // 禁掉长按图片/面板弹出的系统"保存图片"菜单,避免和拖动手势冲突。
+    document.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+    });
+
+    function goToPrev() {
+      var el = document.getElementById("prev-link");
+      if (el) window.location.href = el.href;
+    }
+
+    function goToNext() {
+      var el = document.getElementById("next-link");
+      if (el) window.location.href = el.href;
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") {
+        goToPrev();
+      } else if (e.key === "ArrowRight") {
+        goToNext();
+      } else if (e.key === " " || e.key === "Escape") {
+        overlay.classList.toggle("hidden");
+      }
+    });
+
+    // ---- 左右滑动切图:在悬浮面板之外的区域(照片本身)滑动,
+    // 横向位移够大且明显大于纵向位移时才当作切图手势,避免和点按图片
+    // 唤出面板、拖动面板本身互相打架。 ----
+    var viewerFull = document.getElementById("viewer-full");
+    var SWIPE_THRESHOLD = 50;
+    var swipeStart = null;
+
+    viewerFull.addEventListener("touchstart", function (e) {
+      if (panel.contains(e.target) || e.touches.length !== 1) {
+        swipeStart = null;
+        return;
+      }
+      var t = e.touches[0];
+      swipeStart = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+
+    viewerFull.addEventListener("touchend", function (e) {
+      if (!swipeStart) return;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - swipeStart.x;
+      var dy = t.clientY - swipeStart.y;
+      swipeStart = null;
+      if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      if (dx < 0) {
+        goToNext();
+      } else {
+        goToPrev();
+      }
+    });
+
+    var postponeBtn = document.getElementById("postpone-btn");
+    if (postponeBtn) {
+      postponeBtn.addEventListener("click", function () {
+        postponeBtn.disabled = true;
+        postponeBtn.textContent = "处理中…";
+        fetch("{{ url_for('postpone', key=key, filename=filename) }}", { method: "POST" })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error("postpone failed");
+            return resp.json();
+          })
+          .then(function () {
+            {% if next_index is not none %}
+              // 当前这张移走后,后面的图片都会往前挪一位,原来的位置现在就是下一张
+              window.location.href = "{{ url_for('view_image', key=key, index=index) }}";
+            {% else %}
+              window.location.href = "{{ url_for('browse', key=key) }}";
+            {% endif %}
+          })
+          .catch(function () {
+            postponeBtn.disabled = false;
+            postponeBtn.textContent = "3天后";
+            alert("操作失败,请重试");
+          });
+      });
+    }
+
+    // ---- 悬浮控制面板:整个方形面板都能拖动,位置记忆(按面板中心点相对
+    // 屏幕宽高的比例存储,这样旋转屏幕/换设备后依然落在合理的位置)。
+    // 同时支持触摸(手机上实际用的)和鼠标(方便在电脑上调试)两套事件,
+    // 不依赖 Pointer Events / setPointerCapture,避免个别 WebView 版本上
+    // 悬浮层拖不动的问题。 ----
+    var POSITION_KEY = "viewerPanelPos";
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function setPanelPosition(left, top) {
+      var rect = panel.getBoundingClientRect();
+      var maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+      var maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+      panel.style.left = clamp(left, 8, maxLeft) + "px";
+      panel.style.top = clamp(top, 8, maxTop) + "px";
+      panel.style.bottom = "auto";
+      panel.style.transform = "none";
+    }
+
+    function savePanelPosition() {
+      var rect = panel.getBoundingClientRect();
+      var cx = (rect.left + rect.width / 2) / window.innerWidth;
+      var cy = (rect.top + rect.height / 2) / window.innerHeight;
+      try {
+        localStorage.setItem(POSITION_KEY, JSON.stringify({ xf: cx, yf: cy }));
+      } catch (e) { /* localStorage 不可用时忽略,不影响拖动本身 */ }
+    }
+
+    function restorePanelPosition() {
+      var raw;
+      try {
+        raw = localStorage.getItem(POSITION_KEY);
+      } catch (e) {
+        return;
+      }
+      if (!raw) return;
+      var pos;
+      try {
+        pos = JSON.parse(raw);
+      } catch (e) {
+        return;
+      }
+      if (typeof pos.xf !== "number" || typeof pos.yf !== "number") return;
+      var rect = panel.getBoundingClientRect();
+      setPanelPosition(pos.xf * window.innerWidth - rect.width / 2, pos.yf * window.innerHeight - rect.height / 2);
+    }
+
+    var DRAG_THRESHOLD = 6;
+    var dragState = null;
+    var suppressClick = false;
+
+    function pointFromEvent(e) {
+      if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (e.changedTouches && e.changedTouches.length) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    function dragStart(e) {
+      if (dragState) return;
+      var p = pointFromEvent(e);
+      var rect = panel.getBoundingClientRect();
+      dragState = { startX: p.x, startY: p.y, startLeft: rect.left, startTop: rect.top, moved: false };
+    }
+
+    function dragMove(e) {
+      if (!dragState) return;
+      var p = pointFromEvent(e);
+      var dx = p.x - dragState.startX;
+      var dy = p.y - dragState.startY;
+      if (!dragState.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+        dragState.moved = true;
+        panel.classList.add("dragging");
+      }
+      if (dragState.moved) {
+        setPanelPosition(dragState.startLeft + dx, dragState.startTop + dy);
+        if (e.cancelable) e.preventDefault();
+      }
+    }
+
+    function dragEnd() {
+      if (!dragState) return;
+      var moved = dragState.moved;
+      panel.classList.remove("dragging");
+      dragState = null;
+      if (moved) {
+        savePanelPosition();
+        suppressClick = true;
+        setTimeout(function () { suppressClick = false; }, 0);
+      }
+    }
+
+    panel.addEventListener("touchstart", dragStart, { passive: true });
+    panel.addEventListener("touchmove", dragMove, { passive: false });
+    panel.addEventListener("touchend", dragEnd);
+    panel.addEventListener("touchcancel", dragEnd);
+
+    panel.addEventListener("mousedown", dragStart);
+    document.addEventListener("mousemove", dragMove);
+    document.addEventListener("mouseup", dragEnd);
+
+    panel.addEventListener("click", function (e) {
+      if (suppressClick) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+
+    window.addEventListener("resize", function () {
+      if (panel.style.left) {
+        var rect = panel.getBoundingClientRect();
+        setPanelPosition(rect.left, rect.top);
+      }
+    });
+
+    restorePanelPosition();
+  </script>
+</body>
+</html>

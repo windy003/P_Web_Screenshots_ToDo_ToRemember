@@ -1,17 +1,36 @@
 <resources>
     <string name="app_name">图片文件夹小部件</string>
     <string name="configure_title">新建小部件</string>
+    <string name="edit_title">编辑小部件</string>
+    <string name="btn_save">保存</string>
     <string name="label_name">名称</string>
-    <string name="label_url">URL(文件夹的 API 地址)</string>
     <string name="hint_name">例如:待办截图</string>
-    <string name="hint_url">服务端某个文件夹的 API 地址</string>
-    <!-- 预填在 URL 输入框里的示例值,仅供参考,请改成自己服务端的实际 IP/端口/文件夹 key -->
-    <string name="example_url">http://192.168.2.56:5000/api/folders/ToDo/count</string>
+    <string name="label_url_big">大 的 URL</string>
+    <string name="label_url_small">小 的 URL</string>
+    <string name="label_url_todo">待 的 URL</string>
+    <string name="hint_url">服务端某个文件夹的 API 地址,留空则不显示这一行</string>
+    <string name="label_browse_big">大 的浏览地址</string>
+    <string name="label_browse_small">小 的浏览地址</string>
+    <string name="label_browse_todo">待 的浏览地址</string>
+    <string name="hint_browse">文件夹的网页浏览地址(可选)</string>
+    <string name="label_browse_section">点击下方按钮,打开对应文件夹的浏览页面</string>
+    <string name="error_browse_empty">还没有设置这个分类的浏览地址</string>
+    <!-- 预填在 URL 输入框里的默认值,仅供参考,请改成自己服务端的实际 IP/端口/文件夹 key -->
+    <string name="example_url_big">http://192.168.2.56:5011/api/folders/Large_To_Remember/count</string>
+    <string name="example_url_small">http://192.168.2.56:5011/api/folders/Small_To_Remember/count</string>
+    <string name="example_url_todo">http://192.168.2.56:5011/api/folders/ToDo/count</string>
+    <string name="example_browse_big">http://192.168.2.56:5011/browse/Large_To_Remember</string>
+    <string name="example_browse_small">http://192.168.2.56:5011/browse/Small_To_Remember</string>
+    <string name="example_browse_todo">http://192.168.2.56:5011/browse/ToDo</string>
+    <string name="row_label_big">大</string>
+    <string name="row_label_small">小</string>
+    <string name="row_label_todo">待</string>
     <string name="btn_add">添加</string>
     <string name="btn_cancel">取消</string>
-    <string name="error_empty">名称和 URL 不能为空</string>
+    <string name="error_empty">名称不能为空</string>
     <string name="widget_loading">加载中…</string>
     <string name="widget_load_failed">获取失败</string>
-    <string name="widget_count_format">%1$s 张图片</string>
+    <string name="widget_row_empty">未设置</string>
+    <string name="widget_row_format">%1$s: %2$s</string>
     <string name="main_hint">这个 App 目前只用来提供\"图片数量\"小部件。\n请长按 Android 桌面空白处 → 小部件 → 找到\"图片文件夹小部件\",拖到桌面添加。</string>
 </resources>

@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -7,6 +8,12 @@ from flask import Flask, abort, jsonify, render_template, send_from_directory, u
 load_dotenv()
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+
+# server/Move_To_3_Days_Later_Script 里的常驻脚本负责这两步:
+#   1) 每天 8:00 把放满 3 天的图片从 .env 配置的文件夹挪进 Reached_3_Days;
+#   2) 8:00-16:00 之间把 Reached_3_Days 里的图片匀速挪进 releasing。
+# 网页/App 浏览、计数用到的都是 releasing 子文件夹的内容。
+RELEASING_DIR_NAME = "releasing"
 
 # 固定的三个文件夹 key,对应 .env 中的配置项
 FOLDER_KEYS = ["Small_To_Remember", "Large_To_Remember", "ToDo"]
@@ -27,6 +34,19 @@ FOLDERS = load_folders()
 app = Flask(__name__)
 
 
+@app.context_processor
+def inject_asset_version():
+    # WebView 对静态资源缓存比较激进,style.css 改了内容却不改文件名的话
+    # 客户端可能还在用旧样式。这里拿文件的修改时间当版本号拼到 URL 后面,
+    # 内容一变 URL 就变,强制客户端重新拉取。
+    try:
+        mtime = os.path.getmtime(os.path.join(app.static_folder, "style.css"))
+        version = str(int(mtime))
+    except OSError:
+        version = "0"
+    return {"asset_version": version}
+
+
 def get_folder_path(key):
     if key not in FOLDER_KEYS:
         abort(404, description=f"未知的文件夹 key: {key}")
@@ -34,6 +54,11 @@ def get_folder_path(key):
     if path is None:
         abort(404, description=f"文件夹 key '{key}' 未在 .env 中配置")
     return path
+
+
+def get_releasing_path(key):
+    """浏览/展示用的目录:每天匀速放出的图片会被移动脚本放进这个子文件夹。"""
+    return get_folder_path(key) / RELEASING_DIR_NAME
 
 
 def list_images(path: Path):
@@ -55,7 +80,7 @@ def index():
     for key in FOLDER_KEYS:
         path = FOLDERS.get(key)
         configured = path is not None
-        count = len(list_images(path)) if configured else 0
+        count = len(list_images(get_releasing_path(key))) if configured else 0
         summaries.append({
             "key": key,
             "configured": configured,
@@ -71,7 +96,7 @@ def api_folders():
     for key in FOLDER_KEYS:
         path = FOLDERS.get(key)
         configured = path is not None
-        count = len(list_images(path)) if configured else 0
+        count = len(list_images(get_releasing_path(key))) if configured else 0
         result.append({
             "key": key,
             "name": key,
@@ -84,8 +109,7 @@ def api_folders():
 
 @app.route("/api/folders/<key>/count")
 def api_folder_count(key):
-    path = get_folder_path(key)
-    count = len(list_images(path))
+    count = len(list_images(get_releasing_path(key)))
     return jsonify({
         "key": key,
         "name": key,
@@ -96,7 +120,7 @@ def api_folder_count(key):
 
 @app.route("/browse/<key>")
 def browse(key):
-    path = get_folder_path(key)
+    path = get_releasing_path(key)
     images = list_images(path)
     return render_template(
         "gallery.html",
@@ -108,7 +132,7 @@ def browse(key):
 
 @app.route("/view/<key>/<int:index>")
 def view_image(key, index):
-    path = get_folder_path(key)
+    path = get_releasing_path(key)
     images = list_images(path)
     if not images:
         abort(404, description="该文件夹下没有图片")
@@ -128,8 +152,40 @@ def view_image(key, index):
 
 @app.route("/media/<key>/<path:filename>")
 def media(key, filename):
-    path = get_folder_path(key)
+    path = get_releasing_path(key)
     return send_from_directory(path, filename)
+
+
+def _is_plain_filename(filename: str) -> bool:
+    """只允许普通文件名,不允许路径分隔符/上跳,防止越权访问其它目录。"""
+    return filename not in ("", ".", "..") and "/" not in filename and "\\" not in filename
+
+
+@app.route("/api/postpone/<key>/<path:filename>", methods=["POST"])
+def postpone(key, filename):
+    """"3天后"按钮:把图片从 releasing 挪回最上层文件夹,重置修改时间,
+    回到流程最开始 —— 等再放满 3 天、且轮到当天的放出窗口,才会又出现在 releasing 里。"""
+    if not _is_plain_filename(filename):
+        abort(400, description="非法文件名")
+
+    releasing_path = get_releasing_path(key)
+    base_path = get_folder_path(key)
+
+    src = releasing_path / filename
+    if not src.is_file():
+        abort(404, description="图片不存在或已被处理")
+
+    base_path.mkdir(parents=True, exist_ok=True)
+    dest = base_path / filename
+    if dest.exists():
+        stem, suffix = dest.stem, dest.suffix
+        dest = base_path / f"{stem}_{int(time.time())}{suffix}"
+
+    src.rename(dest)
+    now = time.time()
+    os.utime(dest, (now, now))  # 重置修改时间,让 3 天计时重新开始
+
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
