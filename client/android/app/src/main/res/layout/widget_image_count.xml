@@ -6,14 +6,15 @@
     android:orientation="vertical"
     android:gravity="center"
     android:background="#FFFFFF"
-    android:padding="2dp">
+    android:padding="4dp">
 
     <TextView
         android:id="@+id/widget_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#1E2128"
-        android:textSize="7sp"
+        android:textColor="#F57C00"
+        android:textSize="12sp"
+        android:includeFontPadding="false"
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/app_name" />
@@ -22,9 +23,11 @@
         android:id="@+id/widget_count_big"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:textColor="#1A73E8"
-        android:textSize="8sp"
+        android:textSize="10sp"
         android:textStyle="bold"
+        android:includeFontPadding="false"
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_loading" />
@@ -33,9 +36,11 @@
         android:id="@+id/widget_count_small"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
         android:textColor="#1A73E8"
-        android:textSize="8sp"
+        android:textSize="10sp"
         android:textStyle="bold"
+        android:includeFontPadding="false"
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_loading" />
@@ -44,11 +49,25 @@
         android:id="@+id/widget_count_todo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
         android:textColor="#1A73E8"
-        android:textSize="8sp"
+        android:textSize="10sp"
         android:textStyle="bold"
+        android:includeFontPadding="false"
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_loading" />
+
+    <Chronometer
+        android:id="@+id/widget_last_refresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:textColor="#E53935"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
 </LinearLayout>

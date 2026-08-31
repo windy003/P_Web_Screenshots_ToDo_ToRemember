@@ -21,6 +21,7 @@ Win11 系统托盘客户端。
 - 所有已创建的图标会保存到 config.json,下次启动自动恢复。
 """
 
+import datetime
 import json
 import socket
 import subprocess
@@ -44,8 +45,38 @@ from PIL import Image, ImageDraw, ImageFont
 SESSION = requests.Session()
 SESSION.trust_env = False
 
+# ---- 排查"刚启动时图标要等很久才显示数据"专用的调试日志 ----
+# 定位完问题之后可以把这段和下面的 debug_log(...) 调用一起删掉。
+DEBUG_LOG_PATH = Path(__file__).resolve().parent / "tray_debug.log"
+_debug_log_lock = threading.Lock()
+
+
+def debug_log(message):
+    line = f"{datetime.datetime.now():%H:%M:%S.%f} [{threading.current_thread().name}] {message}"
+    with _debug_log_lock:
+        try:
+            with DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 POLL_INTERVAL_SECONDS = 30
+# 启动时如果一次性创建很多个托盘图标,每个图标"添加"+"第一次刷新数字"这两次
+# Shell 通知几乎同时发生,短时间内挤给资源管理器(Explorer)一大堆图标重绘请求,
+# 它可能来不及及时重绘,表现为图标在任务栏上卡在占位符很久才真正显示出数字。
+# 这里在依次创建每个图标之间插入一点间隔,把这些通知错开发送,减轻突发压力。
+ICON_STARTUP_STAGGER_SECONDS = 0.3
+# 刚启动/刚失败时数据还没拿到,不想让用户对着"?"等满一整个 30 秒轮询周期
+# (常见于开机自启时网络还没就绪、或服务端刚好还没起来)。所以失败时先用更短的
+# 间隔连续重试一阵子,拿到数据或重试次数用完了才退回正常的 30 秒轮询。
+FAST_RETRY_SECONDS = 1
+FAST_RETRY_ATTEMPTS = 15
+# requests 的 timeout 如果只传一个数字,连接和读取各自都能用满这个时间——网络还没就绪时
+# "连不上"这一步本身就可能卡满这么久,retry 间隔再短也没用。这里把连接超时单独调短,
+# 连不上就很快失败去重试;读取超时保持宽松一点,避免服务端正常响应慢被误判成失败。
+CONNECT_TIMEOUT_SECONDS = 1.5
+READ_TIMEOUT_SECONDS = 6
 ICON_BG_COLOR = (66, 133, 244)  # 固定蓝色背景
 ICON_TEXT_COLOR = (255, 255, 255)  # 固定白色数字
 # 示例地址,仅供参考:把 IP、端口换成你自己服务端的实际值,
@@ -253,13 +284,20 @@ class FolderIcon:
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("新建图标(&N)", self._on_new_icon),
                 pystray.MenuItem("重启(&R)", self._on_restart),
+                pystray.MenuItem("退出(&X)", self._on_quit),
             ),
         )
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
 
     def start(self):
-        threading.Thread(target=self.icon.run, daemon=True).start()
+        debug_log(f"[{self.name}] start() 被调用,准备起 icon.run() 线程和轮询线程")
+        threading.Thread(target=self._run_icon_debug, daemon=True).start()
         self._poll_thread.start()
+
+    def _run_icon_debug(self):
+        debug_log(f"[{self.name}] icon.run() 线程已启动,进入 pystray 消息循环")
+        self.icon.run()
+        debug_log(f"[{self.name}] icon.run() 已返回(说明图标被停止了)")
 
     def stop(self):
         self._stop_event.set()
@@ -270,22 +308,43 @@ class FolderIcon:
             pass
 
     def _poll_loop(self):
+        fail_streak = 0
         while not self._stop_event.is_set():
-            self._fetch_once()
-            self._stop_event.wait(POLL_INTERVAL_SECONDS)
+            ok = self._fetch_once()
+            if ok:
+                fail_streak = 0
+                wait_time = POLL_INTERVAL_SECONDS
+            else:
+                fail_streak += 1
+                wait_time = (
+                    FAST_RETRY_SECONDS
+                    if fail_streak <= FAST_RETRY_ATTEMPTS
+                    else POLL_INTERVAL_SECONDS
+                )
+            self._stop_event.wait(wait_time)
 
     def _fetch_once(self):
+        t0 = time.time()
+        debug_log(f"[{self.name}] 请求开始 url={self.url}")
         try:
-            resp = SESSION.get(self.url, timeout=5)
+            resp = SESSION.get(
+                self.url, timeout=(CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS)
+            )
             resp.raise_for_status()
             data = resp.json()
             count = data.get("count", "?")
             self.browse_url = data.get("browse_url")
+            debug_log(f"[{self.name}] 请求成功 耗时={time.time()-t0:.3f}s count={count}")
+            t1 = time.time()
             self.icon.icon = make_icon_image(count)
             self.icon.title = f"{self.name}: {count} 张图片"[:127]
-        except Exception:
+            debug_log(f"[{self.name}] 图标/标题已更新,更新本身耗时={time.time()-t1:.3f}s")
+            return True
+        except Exception as exc:
+            debug_log(f"[{self.name}] 请求失败 耗时={time.time()-t0:.3f}s error={exc!r}")
             self.icon.icon = make_icon_image("!")
             self.icon.title = f"{self.name}: 获取失败,请检查服务端和 URL"[:127]
+            return False
 
     def _on_refresh(self, icon=None, item=None):
         threading.Thread(target=self._fetch_once, daemon=True).start()
@@ -306,6 +365,10 @@ class FolderIcon:
 
     def _on_remove(self, icon=None, item=None):
         self.app.remove_folder_icon(self)
+
+    def _on_quit(self, icon=None, item=None):
+        # 和主图标的"退出"是同一套逻辑:关掉所有图标、停掉所有代理、退出整个程序。
+        self.app._on_quit_clicked(icon, item)
 
     @property
     def target_base(self):
@@ -692,20 +755,26 @@ class TrayApp:
         self.root.after(0, self.root.quit)
 
     def run(self):
+        debug_log(f"=== tray_app 启动,配置里有 {len(self.config['icons'])} 个图标 ===")
         needs_save = False
-        for item in self.config["icons"]:
+        for i, item in enumerate(self.config["icons"]):
             if "id" not in item:
                 item["id"] = str(uuid.uuid4())
                 needs_save = True
+            if i > 0:
+                time.sleep(ICON_STARTUP_STAGGER_SECONDS)
+            debug_log(f"准备添加图标 name={item.get('name')} url={item.get('url')}")
             self.add_folder_icon(
                 item.get("name", "未命名"),
                 item.get("url", ""),
                 persist=False,
                 config_id=item["id"],
             )
+        debug_log("所有图标已添加完毕(各自的 icon.run()/轮询线程已经在后台起来了)")
         if needs_save:
             save_config(self.config)
         self._autostart_proxies()
+        debug_log("_autostart_proxies() 完成,准备起主图标线程")
         threading.Thread(target=self.main_icon.run, daemon=True).start()
         self.root.mainloop()
 

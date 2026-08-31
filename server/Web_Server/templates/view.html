@@ -15,8 +15,11 @@
         <div class="panel-grip"><span></span><span></span><span></span></div>
 
         <div class="panel-info">
+          <button id="filename-btn" class="ov-btn icon info" type="button" aria-label="查看文件名">i</button>
           <span class="ov-index">{{ index + 1 }} / {{ total }}</span>
         </div>
+
+        <div class="panel-filename hidden" id="panel-filename">{{ filename }}</div>
 
         <div class="panel-nav">
           {% if prev_index is not none %}
@@ -45,6 +48,14 @@
     img.addEventListener("click", function () {
       overlay.classList.toggle("hidden");
     });
+
+    var filenameBtn = document.getElementById("filename-btn");
+    var panelFilename = document.getElementById("panel-filename");
+    if (filenameBtn && panelFilename) {
+      filenameBtn.addEventListener("click", function () {
+        panelFilename.classList.toggle("hidden");
+      });
+    }
 
     // 禁掉长按图片/面板弹出的系统"保存图片"菜单,避免和拖动手势冲突。
     document.addEventListener("contextmenu", function (e) {

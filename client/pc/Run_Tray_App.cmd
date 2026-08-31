@@ -1,0 +1,1 @@
+start  /b  ""   "D:\files\using\Web\P_Web_Screenshots_ToDo_ToRemember\client\pc\.venv\Scripts\pythonw.exe"    "D:\files\using\Web\P_Web_Screenshots_ToDo_ToRemember\client\pc\tray_app.py"

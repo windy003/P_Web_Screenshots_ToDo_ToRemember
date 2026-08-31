@@ -52,6 +52,15 @@ object WidgetPrefs {
     fun getBrowseTodo(context: Context, appWidgetId: Int): String? =
         prefs(context).getString("browse_todo_$appWidgetId", null)
 
+    /** 记录这个小部件最近一次刷新(尝试拉取数据)的时间,用来在小部件底部显示"多久之前更新的"。 */
+    fun setLastRefreshedAt(context: Context, appWidgetId: Int, timeMillis: Long) {
+        prefs(context).edit().putLong("last_refreshed_$appWidgetId", timeMillis).apply()
+    }
+
+    /** 返回 0 表示从来没有成功刷新过。 */
+    fun getLastRefreshedAt(context: Context, appWidgetId: Int): Long =
+        prefs(context).getLong("last_refreshed_$appWidgetId", 0L)
+
     fun remove(context: Context, appWidgetId: Int) {
         prefs(context).edit()
             .remove("name_$appWidgetId")
@@ -61,6 +70,7 @@ object WidgetPrefs {
             .remove("browse_big_$appWidgetId")
             .remove("browse_small_$appWidgetId")
             .remove("browse_todo_$appWidgetId")
+            .remove("last_refreshed_$appWidgetId")
             .apply()
     }
 }
