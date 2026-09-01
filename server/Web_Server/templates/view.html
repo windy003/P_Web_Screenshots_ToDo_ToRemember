@@ -36,6 +36,7 @@
         </div>
 
         <button id="postpone-btn" class="ov-btn postpone full" type="button">3天后</button>
+        <button id="delete-btn" class="ov-btn delete full" type="button">删除</button>
       </div>
     </div>
   </div>
@@ -133,6 +134,32 @@
           .catch(function () {
             postponeBtn.disabled = false;
             postponeBtn.textContent = "3天后";
+            alert("操作失败,请重试");
+          });
+      });
+    }
+
+    var deleteBtn = document.getElementById("delete-btn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", function () {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = "删除中…";
+        fetch("{{ url_for('delete_image', key=key, filename=filename) }}", { method: "POST" })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error("delete failed");
+            return resp.json();
+          })
+          .then(function () {
+            {% if next_index is not none %}
+              // 当前这张删掉后,后面的图片都会往前挪一位,原来的位置现在就是下一张
+              window.location.href = "{{ url_for('view_image', key=key, index=index) }}";
+            {% else %}
+              window.location.href = "{{ url_for('browse', key=key) }}";
+            {% endif %}
+          })
+          .catch(function () {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = "删除";
             alert("操作失败,请重试");
           });
       });

@@ -1,7 +1,10 @@
 package com.toremember.widget
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.os.Bundle
+import android.webkit.JsResult
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
@@ -46,6 +49,25 @@ class GalleryActivity : AppCompatActivity() {
                 setFullscreenMode(finishedUrl?.contains(FULLSCREEN_PATH_MARKER) == true)
             }
         }
+        // WebView 默认不会显示 JS 的 alert() 弹窗(比如删除失败提示),
+        // 需要自己接管 WebChromeClient 用原生对话框弹出来。
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onJsAlert(
+                view: WebView,
+                url: String?,
+                message: String?,
+                result: JsResult,
+            ): Boolean {
+                AlertDialog.Builder(this@GalleryActivity)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
+                    .setOnCancelListener { result.cancel() }
+                    .setCancelable(true)
+                    .show()
+                return true
+            }
+        }
+
         webView.settings.javaScriptEnabled = true
         // 悬浮控制面板的拖动位置保存在 localStorage 里,需要开启 DOM storage 才能生效。
         webView.settings.domStorageEnabled = true

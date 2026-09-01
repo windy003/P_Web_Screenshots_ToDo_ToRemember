@@ -257,6 +257,15 @@ body.viewer-body {
   width: 100%;
 }
 
+.ov-btn.delete {
+  background: rgba(217, 48, 37, 0.9);
+  font-weight: 600;
+}
+
+.ov-btn.delete.full {
+  width: 100%;
+}
+
 .ov-btn.disabled {
   opacity: 0.35;
 }

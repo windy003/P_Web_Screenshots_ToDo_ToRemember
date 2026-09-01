@@ -188,6 +188,22 @@ def postpone(key, filename):
     return jsonify({"ok": True})
 
 
+@app.route("/api/delete/<key>/<path:filename>", methods=["POST"])
+def delete_image(key, filename):
+    """删除按钮:直接把图片文件从磁盘上永久删除,不可恢复。"""
+    if not _is_plain_filename(filename):
+        abort(400, description="非法文件名")
+
+    releasing_path = get_releasing_path(key)
+    target = releasing_path / filename
+    if not target.is_file():
+        abort(404, description="图片不存在或已被处理")
+
+    target.unlink()
+
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "5000"))
