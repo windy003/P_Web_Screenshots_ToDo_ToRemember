@@ -1,6 +1,5 @@
 package com.toremember.widget
 
-import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -9,57 +8,36 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 
 /**
  * 显示"大/小/待"三个分类图片数量的小部件,点击后直接打开编辑设置界面。
  *
  * 系统自带的 updatePeriodMillis 最短只能设到 30 分钟(系统强制下限,设更短也没用),
- * 想做到每分钟刷新一次,只能自己用 AlarmManager 定时唤醒。注意:Doze/省电模式下,
- * 系统仍可能推迟这种"非精确"闹钟——这也是小部件底部要显示"距离上次刷新多久"的原因,
- * 让用户能看出数据是不是因为省电策略变得不够新鲜,而不是假装每分钟都精确刷新到。
+ * 想做到每分钟刷新一次,靠 WidgetRefreshService 常驻的前台服务定时触发——这也是
+ * 小部件底部要显示"距离上次刷新多久"的原因,让用户能看出数据是不是因为服务被系统
+ * 意外杀掉而变得不够新鲜,而不是假装每分钟都精确刷新到。
  */
 class ImageCountWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private val executor = Executors.newCachedThreadPool()
 
-        private const val ACTION_REFRESH_TICK = "com.toremember.widget.ACTION_REFRESH_TICK"
-        private const val REFRESH_INTERVAL_MILLIS = 60_000L
-        private const val ALARM_REQUEST_CODE = 1001
+        private fun startRefreshService(context: Context) {
+            ContextCompat.startForegroundService(context, Intent(context, WidgetRefreshService::class.java))
+        }
 
-        private fun refreshPendingIntent(context: Context): PendingIntent {
-            val intent = Intent(context, ImageCountWidgetProvider::class.java).apply {
-                action = ACTION_REFRESH_TICK
+        private fun stopRefreshService(context: Context) {
+            context.stopService(Intent(context, WidgetRefreshService::class.java))
+        }
+
+        fun updateAllWidgets(context: Context) {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, ImageCountWidgetProvider::class.java))
+            for (appWidgetId in ids) {
+                updateWidget(context, appWidgetManager, appWidgetId)
             }
-            return PendingIntent.getBroadcast(
-                context,
-                ALARM_REQUEST_CODE,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
-        private fun scheduleRefreshAlarm(context: Context) {
-            // setInexactRepeating 在系统看来是"低优先级"的重复闹钟,一旦进入 Doze/省电模式
-            // 很容易被系统整个跳过、批量推迟到不知道多久之后。改成每次触发后自己重新预约
-            // 下一次的 setAndAllowWhileIdle,能在 Doze 维护窗口也照样醒来,不需要像
-            // setExactAndAllowWhileIdle 那样在 Android 12+ 上额外申请"闹钟与提醒"权限
-            // (那个权限拿不到会直接抛异常,风险更大,对这种非核心功能不值得)。
-            // 即便如此,如果用户没有把这个 App 加入电池优化白名单,深度省电时系统仍会
-            // 强制拉长间隔,这是安卓平台本身的限制,不是这段代码能绕开的。
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val triggerAt = SystemClock.elapsedRealtime() + REFRESH_INTERVAL_MILLIS
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME,
-                triggerAt,
-                refreshPendingIntent(context)
-            )
-        }
-
-        private fun cancelRefreshAlarm(context: Context) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.cancel(refreshPendingIntent(context))
         }
 
         /** 第二个返回值表示这一行是不是真的刷新成功了(而不是留空/请求失败)。 */
@@ -92,7 +70,7 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
 
         /**
          * 用 Chronometer 而不是普通文字:Chronometer 一旦设好 base 并 start,
-         * 是由系统/桌面自己按秒重绘的,不需要我们的进程或闹钟一直醒着去更新它,
+         * 是由系统/桌面自己按秒重绘的,不需要我们的进程一直醒着去更新它,
          * 显示出来就是"距离上次刷新"那个数字自己一直在跳(H:MM:SS)。
          *
          * Chronometer.base 要求是 SystemClock.elapsedRealtime() 时间基准的值,
@@ -170,21 +148,6 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        if (intent.action == ACTION_REFRESH_TICK) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, ImageCountWidgetProvider::class.java))
-            for (appWidgetId in ids) {
-                updateWidget(context, appWidgetManager, appWidgetId)
-            }
-            // setAndAllowWhileIdle 只触发一次,得在这次醒来的时候自己把下一次也约好。
-            if (ids.isNotEmpty()) {
-                scheduleRefreshAlarm(context)
-            }
-        }
-    }
-
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -194,18 +157,18 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
         // 系统每次调用 onUpdate(新加图标、每 30 分钟一次的兜底刷新……)都顺手确认一下
-        // 每分钟的闹钟还在,防止某些情况下闹钟被系统清掉后就再也不会自己恢复。
-        scheduleRefreshAlarm(context)
+        // 刷新服务还活着,防止它被系统杀掉后就再也不会自己恢复。
+        startRefreshService(context)
     }
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        scheduleRefreshAlarm(context)
+        startRefreshService(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        cancelRefreshAlarm(context)
+        stopRefreshService(context)
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {

@@ -33,4 +33,6 @@
     <string name="widget_row_empty">未设置</string>
     <string name="widget_row_format">%1$s: %2$s</string>
     <string name="main_hint">这个 App 目前只用来提供\"图片数量\"小部件。\n请长按 Android 桌面空白处 → 小部件 → 找到\"图片文件夹小部件\",拖到桌面添加。</string>
+    <string name="widget_refresh_channel_name">小部件后台刷新</string>
+    <string name="widget_refresh_notification_title">正在保持小部件按时刷新</string>
 </resources>
