@@ -19,6 +19,10 @@ class WidgetConfigureActivity : Activity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    /** 整数就显示成整数(如 "10"),否则保留小数(如 "10.5"),回填输入框时更好看。 */
+    private fun formatNumber(value: Float): String =
+        if (value == value.toInt().toFloat()) value.toInt().toString() else value.toString()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setResult(RESULT_CANCELED)
@@ -41,6 +45,8 @@ class WidgetConfigureActivity : Activity() {
         val editBrowseBig = findViewById<EditText>(R.id.edit_browse_big)
         val editBrowseSmall = findViewById<EditText>(R.id.edit_browse_small)
         val editBrowseTodo = findViewById<EditText>(R.id.edit_browse_todo)
+        val editTextSize = findViewById<EditText>(R.id.edit_text_size)
+        val editLineSpacing = findViewById<EditText>(R.id.edit_line_spacing)
 
         val existingName = WidgetPrefs.getName(this, appWidgetId)
         val isEditing = existingName != null
@@ -53,6 +59,8 @@ class WidgetConfigureActivity : Activity() {
             editBrowseBig.setText(WidgetPrefs.getBrowseBig(this, appWidgetId))
             editBrowseSmall.setText(WidgetPrefs.getBrowseSmall(this, appWidgetId))
             editBrowseTodo.setText(WidgetPrefs.getBrowseTodo(this, appWidgetId))
+            WidgetPrefs.getTextSize(this, appWidgetId)?.let { editTextSize.setText(formatNumber(it)) }
+            WidgetPrefs.getLineSpacing(this, appWidgetId)?.let { editLineSpacing.setText(formatNumber(it)) }
             findViewById<TextView>(R.id.title_text).setText(R.string.edit_title)
             findViewById<Button>(R.id.btn_add).setText(R.string.btn_save)
         }
@@ -67,15 +75,26 @@ class WidgetConfigureActivity : Activity() {
             val browseBig = editBrowseBig.text.toString().trim()
             val browseSmall = editBrowseSmall.text.toString().trim()
             val browseTodo = editBrowseTodo.text.toString().trim()
+            val textSizeInput = editTextSize.text.toString().trim()
+            val lineSpacingInput = editLineSpacing.text.toString().trim()
             if (name.isEmpty()) {
                 Toast.makeText(this, R.string.error_empty, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val textSize = textSizeInput.toFloatOrNull()
+            val lineSpacing = lineSpacingInput.toFloatOrNull()
+            if ((textSizeInput.isNotEmpty() && textSize == null) ||
+                (lineSpacingInput.isNotEmpty() && lineSpacing == null)
+            ) {
+                Toast.makeText(this, R.string.error_invalid_number, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             WidgetPrefs.save(
                 this, appWidgetId, name,
                 urlBig, urlSmall, urlTodo,
-                browseBig, browseSmall, browseTodo
+                browseBig, browseSmall, browseTodo,
+                textSize, lineSpacing
             )
 
             val appWidgetManager = AppWidgetManager.getInstance(this)

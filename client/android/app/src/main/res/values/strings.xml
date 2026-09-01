@@ -15,6 +15,11 @@
     <string name="hint_browse">文件夹的网页浏览地址(可选)</string>
     <string name="label_browse_section">点击下方按钮,打开对应文件夹的浏览页面</string>
     <string name="error_browse_empty">还没有设置这个分类的浏览地址</string>
+    <string name="label_text_size">字号(sp)</string>
+    <string name="hint_text_size">留空则使用默认字号</string>
+    <string name="label_line_spacing">行间距(dp)</string>
+    <string name="hint_line_spacing">留空则使用默认行间距</string>
+    <string name="error_invalid_number">字号/行间距请输入数字,或留空使用默认值</string>
     <!-- 预填在 URL 输入框里的默认值,仅供参考,请改成自己服务端的实际 IP/端口/文件夹 key -->
     <string name="example_url_big">http://192.168.2.56:5011/api/folders/Large_To_Remember/count</string>
     <string name="example_url_small">http://192.168.2.56:5011/api/folders/Small_To_Remember/count</string>

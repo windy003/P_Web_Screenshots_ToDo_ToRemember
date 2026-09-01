@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
@@ -23,6 +24,47 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private val executor = Executors.newCachedThreadPool()
+
+        // 布局文件里原本写死的默认字号/行间距,用户没有在设置界面自定义时,继续用这一套,
+        // 保证没配置过新参数的老小部件外观不变。
+        private const val DEFAULT_NAME_TEXT_SIZE_SP = 12f
+        private const val DEFAULT_ROW_TEXT_SIZE_SP = 10f
+        private const val DEFAULT_SPACING_BIG_DP = 4f
+        private const val DEFAULT_SPACING_SMALL_DP = 2f
+        private const val DEFAULT_SPACING_TODO_DP = 2f
+        private const val DEFAULT_SPACING_LAST_REFRESH_DP = 5f
+
+        private fun dpToPx(context: Context, dp: Float): Int =
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.resources.displayMetrics).toInt()
+
+        /**
+         * 字号:用户设置了自定义值就统一应用到所有文字行(标题/三行数量/刷新计时器);
+         * 没设置就维持布局里原来的大小(标题 12sp,其余 10sp)。
+         *
+         * 行间距:同理,用户设置了就统一用这个值(单位 dp)当作每一行顶部的间距;
+         * 没设置就沿用原来几行各自不同的默认间距(4/2/2/5dp),靠 paddingTop 实现,
+         * 而不是布局里的 layout_marginTop,这样才能在两个方向(变大/变小)上都可调。
+         */
+        private fun applyTextSizeAndSpacing(context: Context, views: RemoteViews, appWidgetId: Int) {
+            val customTextSize = WidgetPrefs.getTextSize(context, appWidgetId)
+            val nameTextSize = customTextSize ?: DEFAULT_NAME_TEXT_SIZE_SP
+            val rowTextSize = customTextSize ?: DEFAULT_ROW_TEXT_SIZE_SP
+            views.setTextViewTextSize(R.id.widget_name, TypedValue.COMPLEX_UNIT_SP, nameTextSize)
+            views.setTextViewTextSize(R.id.widget_count_big, TypedValue.COMPLEX_UNIT_SP, rowTextSize)
+            views.setTextViewTextSize(R.id.widget_count_small, TypedValue.COMPLEX_UNIT_SP, rowTextSize)
+            views.setTextViewTextSize(R.id.widget_count_todo, TypedValue.COMPLEX_UNIT_SP, rowTextSize)
+            views.setTextViewTextSize(R.id.widget_last_refresh, TypedValue.COMPLEX_UNIT_SP, rowTextSize)
+
+            val customSpacing = WidgetPrefs.getLineSpacing(context, appWidgetId)
+            val spacingBig = dpToPx(context, customSpacing ?: DEFAULT_SPACING_BIG_DP)
+            val spacingSmall = dpToPx(context, customSpacing ?: DEFAULT_SPACING_SMALL_DP)
+            val spacingTodo = dpToPx(context, customSpacing ?: DEFAULT_SPACING_TODO_DP)
+            val spacingLastRefresh = dpToPx(context, customSpacing ?: DEFAULT_SPACING_LAST_REFRESH_DP)
+            views.setViewPadding(R.id.widget_count_big, 0, spacingBig, 0, 0)
+            views.setViewPadding(R.id.widget_count_small, 0, spacingSmall, 0, 0)
+            views.setViewPadding(R.id.widget_count_todo, 0, spacingTodo, 0, 0)
+            views.setViewPadding(R.id.widget_last_refresh, 0, spacingLastRefresh, 0, 0)
+        }
 
         private fun startRefreshService(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, WidgetRefreshService::class.java))
@@ -109,6 +151,7 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
             val loadingText = context.getString(R.string.widget_loading)
             val loadingViews = RemoteViews(context.packageName, R.layout.widget_image_count)
             loadingViews.setTextViewText(R.id.widget_name, name)
+            applyTextSizeAndSpacing(context, loadingViews, appWidgetId)
             applyRows(
                 context,
                 loadingViews,
@@ -139,6 +182,7 @@ class ImageCountWidgetProvider : AppWidgetProvider() {
 
                 val views = RemoteViews(context.packageName, R.layout.widget_image_count)
                 views.setTextViewText(R.id.widget_name, name)
+                applyTextSizeAndSpacing(context, views, appWidgetId)
                 applyRows(context, views, bigText, smallText, todoText)
                 applyLastRefreshChronometer(context, views, appWidgetId)
                 views.setOnClickPendingIntent(R.id.widget_root, editPendingIntent)

@@ -18,9 +18,11 @@ object WidgetPrefs {
         urlTodo: String,
         browseBig: String,
         browseSmall: String,
-        browseTodo: String
+        browseTodo: String,
+        textSizeSp: Float?,
+        lineSpacingDp: Float?
     ) {
-        prefs(context).edit()
+        val editor = prefs(context).edit()
             .putString("name_$appWidgetId", name)
             .putString("url_big_$appWidgetId", urlBig)
             .putString("url_small_$appWidgetId", urlSmall)
@@ -28,7 +30,17 @@ object WidgetPrefs {
             .putString("browse_big_$appWidgetId", browseBig)
             .putString("browse_small_$appWidgetId", browseSmall)
             .putString("browse_todo_$appWidgetId", browseTodo)
-            .apply()
+        if (textSizeSp != null) {
+            editor.putFloat("text_size_$appWidgetId", textSizeSp)
+        } else {
+            editor.remove("text_size_$appWidgetId")
+        }
+        if (lineSpacingDp != null) {
+            editor.putFloat("line_spacing_$appWidgetId", lineSpacingDp)
+        } else {
+            editor.remove("line_spacing_$appWidgetId")
+        }
+        editor.apply()
     }
 
     fun getName(context: Context, appWidgetId: Int): String? =
@@ -52,6 +64,18 @@ object WidgetPrefs {
     fun getBrowseTodo(context: Context, appWidgetId: Int): String? =
         prefs(context).getString("browse_todo_$appWidgetId", null)
 
+    /** 用户自定义的字号(单位 sp),返回 null 表示没设置过,沿用布局里写死的默认字号。 */
+    fun getTextSize(context: Context, appWidgetId: Int): Float? {
+        val value = prefs(context).getFloat("text_size_$appWidgetId", -1f)
+        return if (value <= 0f) null else value
+    }
+
+    /** 用户自定义的行间距(单位 dp),返回 null 表示没设置过,沿用默认间距。 */
+    fun getLineSpacing(context: Context, appWidgetId: Int): Float? {
+        val value = prefs(context).getFloat("line_spacing_$appWidgetId", -1f)
+        return if (value < 0f) null else value
+    }
+
     /** 记录这个小部件最近一次刷新(尝试拉取数据)的时间,用来在小部件底部显示"多久之前更新的"。 */
     fun setLastRefreshedAt(context: Context, appWidgetId: Int, timeMillis: Long) {
         prefs(context).edit().putLong("last_refreshed_$appWidgetId", timeMillis).apply()
@@ -70,6 +94,8 @@ object WidgetPrefs {
             .remove("browse_big_$appWidgetId")
             .remove("browse_small_$appWidgetId")
             .remove("browse_todo_$appWidgetId")
+            .remove("text_size_$appWidgetId")
+            .remove("line_spacing_$appWidgetId")
             .remove("last_refreshed_$appWidgetId")
             .apply()
     }
