@@ -7,6 +7,7 @@ __pycache__/
 
 # PC 客户端运行时生成的本地状态
 client/pc/config.json
+client/pc/tray_debug.log
 
 
 # Android / Gradle
