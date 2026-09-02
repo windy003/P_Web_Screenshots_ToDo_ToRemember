@@ -18,6 +18,10 @@ RELEASING_DIR_NAME = "releasing"
 # 固定的三个文件夹 key,对应 .env 中的配置项
 FOLDER_KEYS = ["Small_To_Remember", "Large_To_Remember", "ToDo"]
 
+# ToDo 不走"放满 3 天才放出"的流程:文件夹里一有图片就要立刻在网页/小部件里
+# 看到。跟 Move_To_3_Days_Later_Script 那边保持一致(那边也会跳过这些 key)。
+IMMEDIATE_FOLDER_KEYS = {"ToDo"}
+
 
 def load_folders():
     folders = {}
@@ -56,9 +60,28 @@ def get_folder_path(key):
     return path
 
 
+def flush_immediate_folder(key, base_path: Path) -> None:
+    """对 IMMEDIATE_FOLDER_KEYS 里的文件夹(目前是 ToDo):把根目录下新出现的
+    图片直接搬进 releasing 子文件夹,不经过 Reached_3_Days 和放出窗口,做到
+    "一放进去就能立刻看到"。"""
+    if not base_path.exists():
+        return
+    releasing_path = base_path / RELEASING_DIR_NAME
+    for entry in list_images(base_path):
+        releasing_path.mkdir(parents=True, exist_ok=True)
+        dest = releasing_path / entry.name
+        if dest.exists():
+            stem, suffix = dest.stem, dest.suffix
+            dest = releasing_path / f"{stem}_{int(time.time())}{suffix}"
+        entry.rename(dest)
+
+
 def get_releasing_path(key):
     """浏览/展示用的目录:每天匀速放出的图片会被移动脚本放进这个子文件夹。"""
-    return get_folder_path(key) / RELEASING_DIR_NAME
+    base_path = get_folder_path(key)
+    if key in IMMEDIATE_FOLDER_KEYS:
+        flush_immediate_folder(key, base_path)
+    return base_path / RELEASING_DIR_NAME
 
 
 def list_images(path: Path):
@@ -147,6 +170,7 @@ def view_image(key, index):
         total=len(images),
         prev_index=prev_index,
         next_index=next_index,
+        show_postpone=key not in IMMEDIATE_FOLDER_KEYS,
     )
 
 
@@ -167,6 +191,8 @@ def postpone(key, filename):
     回到流程最开始 —— 等再放满 3 天、且轮到当天的放出窗口,才会又出现在 releasing 里。"""
     if not _is_plain_filename(filename):
         abort(400, description="非法文件名")
+    if key in IMMEDIATE_FOLDER_KEYS:
+        abort(400, description=f"'{key}' 不使用 3 天后机制,无法推迟")
 
     releasing_path = get_releasing_path(key)
     base_path = get_folder_path(key)
