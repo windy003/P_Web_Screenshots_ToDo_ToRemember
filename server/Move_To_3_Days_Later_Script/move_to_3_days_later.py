@@ -1,7 +1,8 @@
 """
 后台常驻服务(需要一直运行,Ctrl+C 停止),负责 server/Web_Server/.env 里
-配置的每一个文件夹(Small_To_Remember / Large_To_Remember / ToDo)的
-"到期 -> 匀速放出"流程:
+配置的文件夹(Small_To_Remember / Large_To_Remember)的"到期 -> 匀速放出"流程。
+ToDo 文件夹不走这套流程(见 IMMEDIATE_FOLDER_KEYS),一有图片就由
+Web_Server/app.py 立即搬进 releasing 展示,不等 3 天:
 
 1. 每天 RELEASE_START_HOUR 点(默认 8:00)扫描一次该文件夹,把已经放置满
    DAYS_THRESHOLD 天(默认 3 天)的图片挪进 Reached_3_Days 子文件夹。
@@ -36,6 +37,10 @@ STATE_PATH = SCRIPT_DIR / "release_state.json"
 
 # 固定的三个文件夹 key,跟 Web_Server/app.py 保持一致。
 FOLDER_KEYS = ["Small_To_Remember", "Large_To_Remember", "ToDo"]
+
+# ToDo 不走"放满 3 天才放出"的流程,这里完全跳过,由 Web_Server/app.py
+# 在每次访问时把 ToDo 根目录下的新图片直接搬进 releasing。
+IMMEDIATE_FOLDER_KEYS = {"ToDo"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 REACHED_DIR_NAME = "Reached_3_Days"
 RELEASING_DIR_NAME = "releasing"
@@ -147,6 +152,9 @@ def run_tick(
 
     folders = load_folders()
     for key, base_path in folders.items():
+        if key in IMMEDIATE_FOLDER_KEYS:
+            continue  # 交给 Web_Server/app.py 立即放出,这里不处理
+
         key_state = state.get(key, {})
 
         # 到了今天的开始时间、且今天还没扫描过 -> 做一次"到 3 天就挪进 Reached_3_Days",
