@@ -3,11 +3,13 @@ package com.toremember.widget
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.os.Bundle
+import android.view.View
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -43,6 +45,17 @@ class GalleryActivity : AppCompatActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
         val webView = findViewById<WebView>(R.id.gallery_web_view)
+        // 内容延伸到状态栏底下(见上方类注释),普通列表页需要让网页自己的标题
+        // 避开状态栏,不然会被状态栏挡住一半;全屏看图时系统栏隐藏,顶部间距自动变 0,
+        // 依然能铺满整个屏幕。
+        // 注意:padding 要设在 WebView 外面的容器上,直接设在 WebView 自身上不生效
+        // (WebView 硬件加速渲染的内容不遵守自身的 padding)。
+        val galleryRoot = findViewById<View>(R.id.gallery_root)
+        ViewCompat.setOnApplyWindowInsetsListener(galleryRoot) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(0, systemBars.top, 0, 0)
+            insets
+        }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, finishedUrl: String?) {
                 super.onPageFinished(view, finishedUrl)
@@ -71,6 +84,10 @@ class GalleryActivity : AppCompatActivity() {
         webView.settings.javaScriptEnabled = true
         // 悬浮控制面板的拖动位置保存在 localStorage 里,需要开启 DOM storage 才能生效。
         webView.settings.domStorageEnabled = true
+        // WebView 默认会把系统"字体大小"(无障碍 fontScale)乘到网页字号上,
+        // 而独立的 Chrome 浏览器不会这样处理,导致同一个页面在这里显示得比浏览器里大。
+        // 这里用 textZoom 把这个系数抵消掉,让页面始终按 100% 渲染,不受手机字体大小设置影响。
+        webView.settings.textZoom = (100f / resources.configuration.fontScale).toInt()
         // 长按图片(比如拖动悬浮面板时手指压到了图片上)会触发 WebView 自带的
         // "保存图片"菜单,进而跳到系统文件选择器,和我们自己的拖动手势冲突。
         // 这里直接吞掉长按事件,让长按只服务于我们自己的拖动逻辑。
