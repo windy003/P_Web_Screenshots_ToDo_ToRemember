@@ -9,7 +9,8 @@ Win11 系统托盘客户端。
 - 提交后会新建一个托盘图标,定时轮询该 URL 获取图片数量并显示在悬停提示里,
   左键/默认操作会用浏览器打开对应文件夹的图片浏览页面。
 - 右键某个已创建的图标,可以"编辑此图标(E)"修改名称/URL,也可以"删除该图标(D)"、
-  "浏览图片(O)"、"立即刷新(S)"、"重启(R,重启整个程序)"。菜单打开时按对应字母键就能触发。
+  "浏览图片(O)"、"刷新所有图标(S,刷新程序里所有图标)"、"重启(R,重启整个程序)"。
+  菜单打开时按对应字母键就能触发。
 - 右键某个图标还有"建立HTTP API服务器(H)":在本机开一个 HTTP 反向代理,监听局域网,
   把请求转发到该图标 URL 所在的远程主机(通常是 Tailscale 地址)。这样手机等设备
   不需要安装 Tailscale,只要和这台电脑在同一个局域网,直接用这台电脑的局域网 IP
@@ -276,7 +277,7 @@ class FolderIcon:
             menu=pystray.Menu(
                 pystray.MenuItem("浏览图片(&O)", self._on_open, default=True),
                 pystray.MenuItem("编辑此图标(&E)", self._on_edit),
-                pystray.MenuItem("立即刷新(&S)", self._on_refresh),
+                pystray.MenuItem("刷新所有图标(&S)", self._on_refresh_all),
                 pystray.MenuItem("删除该图标(&D)", self._on_remove),
                 pystray.MenuItem(
                     self._proxy_menu_text, self._on_toggle_proxy, checked=self._proxy_checked
@@ -348,6 +349,10 @@ class FolderIcon:
 
     def _on_refresh(self, icon=None, item=None):
         threading.Thread(target=self._fetch_once, daemon=True).start()
+
+    def _on_refresh_all(self, icon=None, item=None):
+        # 右键任意一个图标点"刷新",都刷新程序里所有图标,和主图标的"刷新"是同一套逻辑。
+        self.app._on_refresh_all_clicked(icon, item)
 
     def _on_open(self, icon=None, item=None):
         target = self.browse_url or self.url
