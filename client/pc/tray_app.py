@@ -5,7 +5,8 @@ Win11 系统托盘客户端。
 - "新建图标"会弹出一个小窗口,输入:
     名称  - 鼠标悬停在新图标上显示的名字
     URL   - 服务端某个文件夹的 API 地址,例如 http://127.0.0.1:5000/api/folders/ToDo/count
-- 新图标固定是蓝底白字的方块(不支持自定义颜色),保证数字清楚易读。
+- 新图标固定是白字方块(不支持自定义颜色),底色默认蓝色;如果 URL 指向 ToDo 文件夹,
+  底色显示为橙色,方便一眼区分待办。
 - 提交后会新建一个托盘图标,定时轮询该 URL 获取图片数量并显示在悬停提示里,
   左键/默认操作会用浏览器打开对应文件夹的图片浏览页面。
 - 右键某个已创建的图标,可以"编辑此图标(E)"修改名称/URL,也可以"删除该图标(D)"、
@@ -80,6 +81,9 @@ CONNECT_TIMEOUT_SECONDS = 1.5
 READ_TIMEOUT_SECONDS = 6
 ICON_BG_COLOR = (66, 133, 244)  # 固定蓝色背景
 ICON_TEXT_COLOR = (255, 255, 255)  # 固定白色数字
+ICON_TODO_BG_COLOR = (245, 124, 0)  # ToDo 文件夹用橙色背景,便于一眼区分
+# URL 里出现这个文件夹名(不区分大小写)就认为这个图标监视的是 ToDo 文件夹。
+TODO_FOLDER_KEY = "todo"
 # 示例地址,仅供参考:把 IP、端口换成你自己服务端的实际值,
 # key 换成 Small_To_Remember / Large_To_Remember / ToDo 之一。
 EXAMPLE_URL = "http://192.168.2.56:5000/api/folders/ToDo/count"
@@ -221,7 +225,16 @@ class LocalProxyServer:
             pass
 
 
-def make_icon_image(text):
+def is_todo_url(url):
+    """判断这个图标的 URL 是不是指向 ToDo 文件夹(/api/folders/ToDo/count)。"""
+    try:
+        parts = [seg for seg in urlsplit(str(url)).path.split("/") if seg]
+    except Exception:
+        return False
+    return any(seg.lower() == TODO_FOLDER_KEY for seg in parts)
+
+
+def make_icon_image(text, bg_color=ICON_BG_COLOR):
     # 用更大的画布渲染,缩小到实际托盘尺寸时数字仍然清晰、显得更粗更大。
     # 256 是 Windows ICO 格式支持的最大尺寸,再大也没有意义。
     size = 256
@@ -229,11 +242,11 @@ def make_icon_image(text):
     draw = ImageDraw.Draw(img)
 
     margin = 2
-    # 方块尽量占满整个图标画布,固定蓝底红字,保证数字始终清楚易读。
+    # 方块尽量占满整个图标画布,底色由 bg_color 决定,数字固定白色,保证始终清楚易读。
     draw.rounded_rectangle(
         (margin, margin, size - margin, size - margin),
         radius=32,
-        fill=ICON_BG_COLOR,
+        fill=bg_color,
     )
 
     text = str(text)
@@ -272,7 +285,7 @@ class FolderIcon:
 
         self.icon = pystray.Icon(
             f"folder-{id(self)}",
-            make_icon_image("?"),
+            make_icon_image("?", self.bg_color),
             f"{self.name}: 加载中...",
             menu=pystray.Menu(
                 pystray.MenuItem("浏览图片(&O)", self._on_open, default=True),
@@ -289,6 +302,11 @@ class FolderIcon:
             ),
         )
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+
+    @property
+    def bg_color(self):
+        """ToDo 文件夹的图标用橙色背景,其它文件夹保持蓝色;数字都是白色。"""
+        return ICON_TODO_BG_COLOR if is_todo_url(self.url) else ICON_BG_COLOR
 
     def start(self):
         debug_log(f"[{self.name}] start() 被调用,准备起 icon.run() 线程和轮询线程")
@@ -337,13 +355,13 @@ class FolderIcon:
             self.browse_url = data.get("browse_url")
             debug_log(f"[{self.name}] 请求成功 耗时={time.time()-t0:.3f}s count={count}")
             t1 = time.time()
-            self.icon.icon = make_icon_image(count)
+            self.icon.icon = make_icon_image(count, self.bg_color)
             self.icon.title = f"{self.name}: {count} 张图片"[:127]
             debug_log(f"[{self.name}] 图标/标题已更新,更新本身耗时={time.time()-t1:.3f}s")
             return True
         except Exception as exc:
             debug_log(f"[{self.name}] 请求失败 耗时={time.time()-t0:.3f}s error={exc!r}")
-            self.icon.icon = make_icon_image("!")
+            self.icon.icon = make_icon_image("!", self.bg_color)
             self.icon.title = f"{self.name}: 获取失败,请检查服务端和 URL"[:127]
             return False
 
