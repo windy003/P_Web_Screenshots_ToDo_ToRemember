@@ -266,8 +266,29 @@ body.viewer-body {
   width: 100%;
 }
 
-.ov-btn.disabled {
+.ov-btn.undo {
+  background: rgba(154, 160, 166, 0.9);
+  font-weight: 600;
+}
+
+.ov-btn.undo.full {
+  width: 100%;
+}
+
+.ov-btn.disabled,
+.ov-btn:disabled {
   opacity: 0.35;
+}
+
+.floating-undo {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 10;
+}
+
+.floating-undo .ov-btn {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
 .ov-index {

@@ -22,6 +22,13 @@ FOLDER_KEYS = ["Small_To_Remember", "Large_To_Remember", "ToDo"]
 # 看到。跟 Move_To_3_Days_Later_Script 那边保持一致(那边也会跳过这些 key)。
 IMMEDIATE_FOLDER_KEYS = {"ToDo"}
 
+# "删除"/"3天后"支持撤销:被删除的图片先挪进各自文件夹下的这个隐藏子目录
+# (而不是直接从磁盘抹掉),撤销时再挪回 releasing。撤销栈最多记录这么多步,
+# 超出的最老一步会被"finalize"——如果是删除操作,这时才真正把文件从磁盘删掉。
+TRASH_DIR_NAME = ".trash"
+UNDO_MAX_STEPS = 5
+UNDO_STACK = []
+
 
 def load_folders():
     folders = {}
@@ -185,6 +192,31 @@ def _is_plain_filename(filename: str) -> bool:
     return filename not in ("", ".", "..") and "/" not in filename and "\\" not in filename
 
 
+def _unique_name(dir_path: Path, filename: str) -> str:
+    """如果 dir_path 下已经有同名文件,拼上时间戳避免覆盖。"""
+    if not (dir_path / filename).exists():
+        return filename
+    stem, suffix = Path(filename).stem, Path(filename).suffix
+    return f"{stem}_{int(time.time())}{suffix}"
+
+
+def _finalize_undo_entry(entry: dict) -> None:
+    """一步操作被挤出撤销栈(超过 UNDO_MAX_STEPS)后彻底定型:
+    删除操作这时才真正从磁盘上抹掉暂存的文件;3天后操作本来就已经是
+    最终状态,不用处理。"""
+    if entry["action"] == "delete":
+        base_path = get_folder_path(entry["key"])
+        trash_file = base_path / TRASH_DIR_NAME / entry["trash_name"]
+        if trash_file.is_file():
+            trash_file.unlink()
+
+
+def _push_undo(entry: dict) -> None:
+    UNDO_STACK.append(entry)
+    while len(UNDO_STACK) > UNDO_MAX_STEPS:
+        _finalize_undo_entry(UNDO_STACK.pop(0))
+
+
 @app.route("/api/postpone/<key>/<path:filename>", methods=["POST"])
 def postpone(key, filename):
     """"3天后"按钮:把图片从 releasing 挪回最上层文件夹,重置修改时间,
@@ -201,22 +233,31 @@ def postpone(key, filename):
     if not src.is_file():
         abort(404, description="图片不存在或已被处理")
 
+    original_mtime = src.stat().st_mtime
+
     base_path.mkdir(parents=True, exist_ok=True)
-    dest = base_path / filename
-    if dest.exists():
-        stem, suffix = dest.stem, dest.suffix
-        dest = base_path / f"{stem}_{int(time.time())}{suffix}"
+    dest_name = _unique_name(base_path, filename)
+    dest = base_path / dest_name
 
     src.rename(dest)
     now = time.time()
     os.utime(dest, (now, now))  # 重置修改时间,让 3 天计时重新开始
 
-    return jsonify({"ok": True})
+    _push_undo({
+        "action": "postpone",
+        "key": key,
+        "filename": filename,
+        "postponed_name": dest_name,
+        "mtime": original_mtime,
+    })
+
+    return jsonify({"ok": True, "undo_count": len(UNDO_STACK)})
 
 
 @app.route("/api/delete/<key>/<path:filename>", methods=["POST"])
 def delete_image(key, filename):
-    """删除按钮:直接把图片文件从磁盘上永久删除,不可恢复。"""
+    """删除按钮:把图片挪进 .trash 暂存(而不是立刻从磁盘抹掉),这样撤销栈里
+    还留着这一步时可以恢复;真正的永久删除发生在这一步被挤出撤销栈的时候。"""
     if not _is_plain_filename(filename):
         abort(400, description="非法文件名")
 
@@ -225,9 +266,67 @@ def delete_image(key, filename):
     if not target.is_file():
         abort(404, description="图片不存在或已被处理")
 
-    target.unlink()
+    base_path = get_folder_path(key)
+    trash_dir = base_path / TRASH_DIR_NAME
+    trash_dir.mkdir(parents=True, exist_ok=True)
 
-    return jsonify({"ok": True})
+    original_mtime = target.stat().st_mtime
+    trash_name = _unique_name(trash_dir, filename)
+    target.rename(trash_dir / trash_name)
+
+    _push_undo({
+        "action": "delete",
+        "key": key,
+        "filename": filename,
+        "trash_name": trash_name,
+        "mtime": original_mtime,
+    })
+
+    return jsonify({"ok": True, "undo_count": len(UNDO_STACK)})
+
+
+@app.route("/api/undo/status")
+def undo_status():
+    return jsonify({"count": len(UNDO_STACK)})
+
+
+@app.route("/api/undo", methods=["POST"])
+def undo():
+    """撤销栈顶的一步操作(删除或3天后),把图片挪回 releasing。"""
+    if not UNDO_STACK:
+        abort(400, description="没有可撤销的操作")
+
+    entry = UNDO_STACK.pop()
+    key = entry["key"]
+    base_path = get_folder_path(key)
+    releasing_path = get_releasing_path(key)
+    releasing_path.mkdir(parents=True, exist_ok=True)
+
+    if entry["action"] == "delete":
+        src = base_path / TRASH_DIR_NAME / entry["trash_name"]
+    else:  # postpone
+        src = base_path / entry["postponed_name"]
+
+    if not src.is_file():
+        abort(404, description="要撤销的图片已不存在,可能已被其它流程处理")
+
+    dest_name = _unique_name(releasing_path, entry["filename"])
+    dest = releasing_path / dest_name
+    src.rename(dest)
+    os.utime(dest, (entry["mtime"], entry["mtime"]))
+
+    # 撤销后直接跳到这张图在画廊里现在的位置,而不是退回到网格页。
+    images = list_images(releasing_path)
+    index = next((i for i, img in enumerate(images) if img.name == dest_name), 0)
+
+    return jsonify({
+        "ok": True,
+        "action": entry["action"],
+        "key": key,
+        "filename": dest_name,
+        "index": index,
+        "remaining": len(UNDO_STACK),
+    })
 
 
 if __name__ == "__main__":

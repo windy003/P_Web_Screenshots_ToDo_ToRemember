@@ -22,5 +22,42 @@
   {% else %}
   <div class="empty-hint">这个文件夹里还没有图片。</div>
   {% endif %}
+
+  <div class="floating-undo">
+    <button id="undo-btn" class="ov-btn undo" type="button" disabled>撤销</button>
+  </div>
+
+  <script>
+    var undoBtn = document.getElementById("undo-btn");
+
+    function refreshUndoButton() {
+      fetch("/api/undo/status")
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          undoBtn.disabled = !data.count;
+        })
+        .catch(function () { /* 查询失败就保持当前禁用状态 */ });
+    }
+
+    undoBtn.addEventListener("click", function () {
+      undoBtn.disabled = true;
+      undoBtn.textContent = "撤销中…";
+      fetch("/api/undo", { method: "POST" })
+        .then(function (resp) {
+          if (!resp.ok) throw new Error("undo failed");
+          return resp.json();
+        })
+        .then(function (data) {
+          window.location.href = "/view/" + encodeURIComponent(data.key) + "/" + data.index;
+        })
+        .catch(function () {
+          undoBtn.textContent = "撤销";
+          refreshUndoButton();
+          alert("没有可撤销的操作,或操作失败");
+        });
+    });
+
+    refreshUndoButton();
+  </script>
 </body>
 </html>

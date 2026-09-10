@@ -1,10 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
 $procs = Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" |
-    Where-Object { $_.CommandLine -like '*D:\files\using\Web\P_Web_Screenshots_ToDo_ToRemember\server\Web_Server\app.py"*' }
+    Where-Object { $_.CommandLine -like '*D:\files\using\Web\P_Web_Screenshots_ToDo_ToRemember\server\Web_Server\app.py*' }
 
 if (-not $procs) {
-    Write-Host "No matching process found (jdbendi.com\flask\app.py)." -ForegroundColor Yellow
+    Write-Host "No matching process found (D:\files\using\Web\P_Web_Screenshots_ToDo_ToRemember\server\Web_Server\app.py)." -ForegroundColor Yellow
 } else {
     foreach ($p in $procs) {
         Write-Host "Killing PID $($p.ProcessId): $($p.CommandLine)" -ForegroundColor Cyan

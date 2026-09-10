@@ -39,6 +39,7 @@
         <button id="postpone-btn" class="ov-btn postpone full" type="button">3天后</button>
         {% endif %}
         <button id="delete-btn" class="ov-btn delete full" type="button">删除</button>
+        <button id="undo-btn" class="ov-btn undo full" type="button" disabled>撤销</button>
       </div>
     </div>
   </div>
@@ -165,6 +166,41 @@
             alert("操作失败,请重试");
           });
       });
+    }
+
+    // ---- 撤销:删除/3天后最多能记住最近 5 步,点一下挪回上一步操作前的状态。
+    // 撤销的图片可能属于任何一个文件夹(不一定是当前正在看的这个),所以
+    // 撤销成功后直接跳到那张图恢复后所在文件夹的全屏查看页,而不是退回网格页。 ----
+    var undoBtn = document.getElementById("undo-btn");
+    if (undoBtn) {
+      function refreshUndoButton() {
+        fetch("/api/undo/status")
+          .then(function (resp) { return resp.json(); })
+          .then(function (data) {
+            undoBtn.disabled = !data.count;
+          })
+          .catch(function () { /* 查询失败就保持当前禁用状态,不影响其它操作 */ });
+      }
+
+      undoBtn.addEventListener("click", function () {
+        undoBtn.disabled = true;
+        undoBtn.textContent = "撤销中…";
+        fetch("/api/undo", { method: "POST" })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error("undo failed");
+            return resp.json();
+          })
+          .then(function (data) {
+            window.location.href = "/view/" + encodeURIComponent(data.key) + "/" + data.index;
+          })
+          .catch(function () {
+            undoBtn.textContent = "撤销";
+            refreshUndoButton();
+            alert("没有可撤销的操作,或操作失败");
+          });
+      });
+
+      refreshUndoButton();
     }
 
     // ---- 悬浮控制面板:整个方形面板都能拖动,位置记忆(按面板中心点相对
