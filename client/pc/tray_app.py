@@ -6,7 +6,8 @@ Win11 系统托盘客户端。
     名称  - 鼠标悬停在新图标上显示的名字
     URL   - 服务端某个文件夹的 API 地址,例如 http://127.0.0.1:5000/api/folders/ToDo/count
 - 新图标固定是白字方块(不支持自定义颜色),底色默认蓝色;如果 URL 指向 ToDo 文件夹,
-  底色显示为橙色,方便一眼区分待办。
+  底色显示为橙色,方便一眼区分待办;名称以"华隆"开头的图标底色显示为红色
+  (但"华隆"的 ToDo 图标仍然是橙色,待办的橙色优先)。
 - 提交后会新建一个托盘图标,定时轮询该 URL 获取图片数量并显示在悬停提示里,
   左键/默认操作会用浏览器打开对应文件夹的图片浏览页面。
 - 右键某个已创建的图标,可以"编辑此图标(E)"修改名称/URL,也可以"删除该图标(D)"、
@@ -82,8 +83,11 @@ READ_TIMEOUT_SECONDS = 6
 ICON_BG_COLOR = (66, 133, 244)  # 固定蓝色背景
 ICON_TEXT_COLOR = (255, 255, 255)  # 固定白色数字
 ICON_TODO_BG_COLOR = (245, 124, 0)  # ToDo 文件夹用橙色背景,便于一眼区分
+ICON_HUALONG_BG_COLOR = (211, 47, 47)  # 华隆的图标用红色背景,和融富府区分开
 # URL 里出现这个文件夹名(不区分大小写)就认为这个图标监视的是 ToDo 文件夹。
 TODO_FOLDER_KEY = "todo"
+# 名称以这个前缀开头的图标算作"华隆"的图标。
+HUALONG_NAME_PREFIX = "华隆"
 # 示例地址,仅供参考:把 IP、端口换成你自己服务端的实际值,
 # key 换成 Small_To_Remember / Large_To_Remember / ToDo 之一。
 EXAMPLE_URL = "http://192.168.2.56:5000/api/folders/ToDo/count"
@@ -234,6 +238,11 @@ def is_todo_url(url):
     return any(seg.lower() == TODO_FOLDER_KEY for seg in parts)
 
 
+def is_hualong_name(name):
+    """判断这个图标是不是"华隆"的图标(名称以"华隆"开头)。"""
+    return str(name or "").strip().startswith(HUALONG_NAME_PREFIX)
+
+
 def make_icon_image(text, bg_color=ICON_BG_COLOR):
     # 用更大的画布渲染,缩小到实际托盘尺寸时数字仍然清晰、显得更粗更大。
     # 256 是 Windows ICO 格式支持的最大尺寸,再大也没有意义。
@@ -305,8 +314,15 @@ class FolderIcon:
 
     @property
     def bg_color(self):
-        """ToDo 文件夹的图标用橙色背景,其它文件夹保持蓝色;数字都是白色。"""
-        return ICON_TODO_BG_COLOR if is_todo_url(self.url) else ICON_BG_COLOR
+        """ToDo 文件夹用橙色背景,华隆的其它文件夹用红色,剩下的保持蓝色;数字都是白色。
+
+        待办的橙色优先级最高,所以"华隆-待"仍然是橙色。
+        """
+        if is_todo_url(self.url):
+            return ICON_TODO_BG_COLOR
+        if is_hualong_name(self.name):
+            return ICON_HUALONG_BG_COLOR
+        return ICON_BG_COLOR
 
     def start(self):
         debug_log(f"[{self.name}] start() 被调用,准备起 icon.run() 线程和轮询线程")
