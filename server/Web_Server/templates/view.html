@@ -35,11 +35,17 @@
           {% endif %}
         </div>
 
-        {% if show_postpone %}
-        <button id="postpone-btn" class="ov-btn postpone full" type="button">3天后</button>
-        {% endif %}
-        <button id="delete-btn" class="ov-btn delete full" type="button">删除</button>
-        <button id="undo-btn" class="ov-btn undo full" type="button" disabled>撤销</button>
+        <div class="panel-actions">
+          <div class="panel-actions-row">
+            {% if show_postpone %}
+            <button id="postpone-btn" class="ov-btn round postpone" type="button">3天后</button>
+            {% endif %}
+            <button id="undo-btn" class="ov-btn round undo" type="button" disabled>撤销</button>
+          </div>
+          <div class="panel-actions-row">
+            <button id="delete-btn" class="ov-btn round delete" type="button">删除</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -120,7 +126,7 @@
     if (postponeBtn) {
       postponeBtn.addEventListener("click", function () {
         postponeBtn.disabled = true;
-        postponeBtn.textContent = "处理中…";
+        postponeBtn.textContent = "…";
         fetch("{{ url_for('postpone', key=key, filename=filename) }}", { method: "POST" })
           .then(function (resp) {
             if (!resp.ok) throw new Error("postpone failed");
@@ -146,7 +152,7 @@
     if (deleteBtn) {
       deleteBtn.addEventListener("click", function () {
         deleteBtn.disabled = true;
-        deleteBtn.textContent = "删除中…";
+        deleteBtn.textContent = "…";
         fetch("{{ url_for('delete_image', key=key, filename=filename) }}", { method: "POST" })
           .then(function (resp) {
             if (!resp.ok) throw new Error("delete failed");
@@ -184,7 +190,7 @@
 
       undoBtn.addEventListener("click", function () {
         undoBtn.disabled = true;
-        undoBtn.textContent = "撤销中…";
+        undoBtn.textContent = "…";
         fetch("/api/undo", { method: "POST" })
           .then(function (resp) {
             if (!resp.ok) throw new Error("undo failed");

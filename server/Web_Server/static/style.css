@@ -248,13 +248,37 @@ body.viewer-body {
   font-size: 15px;
 }
 
+/* 3天后 / 撤销 / 删除:手指头大小的圆形按钮,上排"3天后"和"撤销",
+   下排单独一个"删除"。 */
+.panel-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.ov-btn.round {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .ov-btn.postpone {
   background: rgba(26, 115, 232, 0.9);
   font-weight: 600;
-}
-
-.ov-btn.postpone.full {
-  width: 100%;
 }
 
 .ov-btn.delete {
@@ -262,17 +286,9 @@ body.viewer-body {
   font-weight: 600;
 }
 
-.ov-btn.delete.full {
-  width: 100%;
-}
-
 .ov-btn.undo {
   background: rgba(154, 160, 166, 0.9);
   font-weight: 600;
-}
-
-.ov-btn.undo.full {
-  width: 100%;
 }
 
 .ov-btn.disabled,
