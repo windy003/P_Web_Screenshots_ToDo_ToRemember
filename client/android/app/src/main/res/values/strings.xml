@@ -20,13 +20,16 @@
     <string name="label_line_spacing">行间距(dp)</string>
     <string name="hint_line_spacing">留空则使用默认行间距</string>
     <string name="error_invalid_number">字号/行间距请输入数字,或留空使用默认值</string>
-    <!-- 预填在 URL 输入框里的默认值,仅供参考,请改成自己服务端的实际 IP/端口/文件夹 key -->
+    <!-- 新建小部件时(首次安装 / 清除数据后 / 删除重加)预填的默认配置,可自行修改 -->
+    <string name="default_name">融富府</string>
     <string name="example_url_big">http://192.168.2.56:5011/api/folders/Large_To_Remember/count</string>
     <string name="example_url_small">http://192.168.2.56:5011/api/folders/Small_To_Remember/count</string>
     <string name="example_url_todo">http://192.168.2.56:5011/api/folders/ToDo/count</string>
     <string name="example_browse_big">http://192.168.2.56:5011/browse/Large_To_Remember</string>
     <string name="example_browse_small">http://192.168.2.56:5011/browse/Small_To_Remember</string>
     <string name="example_browse_todo">http://192.168.2.56:5011/browse/ToDo</string>
+    <string name="default_text_size">10</string>
+    <string name="default_line_spacing">1</string>
     <string name="row_label_big">大</string>
     <string name="row_label_small">小</string>
     <string name="row_label_todo">待</string>

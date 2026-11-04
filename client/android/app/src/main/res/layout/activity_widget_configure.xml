@@ -29,6 +29,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/hint_name"
+            android:text="@string/default_name"
             android:inputType="text" />
 
         <TextView
@@ -126,6 +127,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/hint_text_size"
+            android:text="@string/default_text_size"
             android:inputType="numberDecimal" />
 
         <TextView
@@ -139,6 +141,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/hint_line_spacing"
+            android:text="@string/default_line_spacing"
             android:inputType="numberDecimal" />
 
         <LinearLayout
