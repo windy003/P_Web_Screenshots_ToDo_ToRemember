@@ -5,12 +5,12 @@ Win11 系统托盘客户端。
 - "新建图标"会弹出一个小窗口,输入:
     名称  - 鼠标悬停在新图标上显示的名字
     URL   - 服务端某个文件夹的 API 地址,例如 http://127.0.0.1:5000/api/folders/ToDo/count
-- 新图标固定是白字方块(不支持自定义颜色),底色默认蓝色;如果 URL 指向 ToDo 文件夹,
-  底色显示为橙色,方便一眼区分待办;名称以"华隆"开头的图标底色显示为红色
-  (但"华隆"的 ToDo 图标仍然是橙色,待办的橙色优先)。
+- 新图标固定是白字方块,底色可以在新建/编辑时选择:蓝色、绿色、橙色;不选(自动)时
+  保持原来的规则:URL 指向 ToDo 文件夹为橙色,名称以"华隆"开头为红色,其余为蓝色
+  (但"华隆"的 ToDo 图标仍然是橙色,待办的橙色优先)。手动选择的颜色优先于自动规则。
 - 提交后会新建一个托盘图标,定时轮询该 URL 获取图片数量并显示在悬停提示里,
   左键/默认操作会用浏览器打开对应文件夹的图片浏览页面。
-- 右键某个已创建的图标,可以"编辑此图标(E)"修改名称/URL,也可以"删除该图标(D)"、
+- 右键某个已创建的图标,可以"编辑此图标(E)"修改名称/URL/背景颜色,也可以"删除该图标(D)"、
   "浏览图片(O)"、"刷新所有图标(S,刷新程序里所有图标)"、"重启(R,重启整个程序)"。
   菜单打开时按对应字母键就能触发。
 - 右键某个图标还有"建立HTTP API服务器(H)":在本机开一个 HTTP 反向代理,监听局域网,
@@ -80,10 +80,18 @@ FAST_RETRY_ATTEMPTS = 15
 # 连不上就很快失败去重试;读取超时保持宽松一点,避免服务端正常响应慢被误判成失败。
 CONNECT_TIMEOUT_SECONDS = 1.5
 READ_TIMEOUT_SECONDS = 6
-ICON_BG_COLOR = (66, 133, 244)  # 固定蓝色背景
+ICON_BG_COLOR = (66, 133, 244)  # 默认蓝色背景
 ICON_TEXT_COLOR = (255, 255, 255)  # 固定白色数字
 ICON_TODO_BG_COLOR = (245, 124, 0)  # ToDo 文件夹用橙色背景,便于一眼区分
 ICON_HUALONG_BG_COLOR = (211, 47, 47)  # 华隆的图标用红色背景,和融富府区分开
+# 用户可以在新建/编辑图标时选择的背景颜色(key 保存到 config.json 的 "color" 字段)。
+# 没有这个字段(或者值为 "auto")时按下面的自动规则决定底色。
+ICON_COLOR_CHOICES = (
+    ("blue", "蓝色", ICON_BG_COLOR),
+    ("green", "绿色", (52, 168, 83)),
+    ("orange", "橙色", ICON_TODO_BG_COLOR),
+)
+ICON_COLOR_RGB = {key: rgb for key, _label, rgb in ICON_COLOR_CHOICES}
 # URL 里出现这个文件夹名(不区分大小写)就认为这个图标监视的是 ToDo 文件夹。
 TODO_FOLDER_KEY = "todo"
 # 名称以这个前缀开头的图标算作"华隆"的图标。
@@ -284,12 +292,15 @@ def make_icon_image(text, bg_color=ICON_BG_COLOR):
 class FolderIcon:
     """代表用户新建的一个"文件夹"托盘图标。"""
 
-    def __init__(self, app, config_id, name, url):
+    def __init__(self, app, config_id, name, url, color=None):
         self.app = app
         self.config_id = config_id
         self.name = name
         self.url = url
+        # 用户手动选择的底色 key(blue/green/orange);None 表示按自动规则决定。
+        self.color = color if color in ICON_COLOR_RGB else None
         self.browse_url = None
+        self._last_text = "?"
         self._stop_event = threading.Event()
 
         self.icon = pystray.Icon(
@@ -313,8 +324,8 @@ class FolderIcon:
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
 
     @property
-    def bg_color(self):
-        """ToDo 文件夹用橙色背景,华隆的其它文件夹用红色,剩下的保持蓝色;数字都是白色。
+    def auto_bg_color(self):
+        """未手动选色时的自动配色:ToDo 文件夹橙色,华隆的其它文件夹红色,剩下的蓝色。
 
         待办的橙色优先级最高,所以"华隆-待"仍然是橙色。
         """
@@ -323,6 +334,11 @@ class FolderIcon:
         if is_hualong_name(self.name):
             return ICON_HUALONG_BG_COLOR
         return ICON_BG_COLOR
+
+    @property
+    def bg_color(self):
+        """手动选择的颜色优先,没选时用自动配色;数字都是白色。"""
+        return ICON_COLOR_RGB.get(self.color, self.auto_bg_color)
 
     def start(self):
         debug_log(f"[{self.name}] start() 被调用,准备起 icon.run() 线程和轮询线程")
@@ -371,12 +387,14 @@ class FolderIcon:
             self.browse_url = data.get("browse_url")
             debug_log(f"[{self.name}] 请求成功 耗时={time.time()-t0:.3f}s count={count}")
             t1 = time.time()
+            self._last_text = str(count)
             self.icon.icon = make_icon_image(count, self.bg_color)
             self.icon.title = f"{self.name}: {count} 张图片"[:127]
             debug_log(f"[{self.name}] 图标/标题已更新,更新本身耗时={time.time()-t1:.3f}s")
             return True
         except Exception as exc:
             debug_log(f"[{self.name}] 请求失败 耗时={time.time()-t0:.3f}s error={exc!r}")
+            self._last_text = "!"
             self.icon.icon = make_icon_image("!", self.bg_color)
             self.icon.title = f"{self.name}: 获取失败,请检查服务端和 URL"[:127]
             return False
@@ -428,7 +446,11 @@ class FolderIcon:
         self.app.toggle_proxy_for(self)
 
     def to_config(self):
-        return {"id": self.config_id, "name": self.name, "url": self.url}
+        data = {"id": self.config_id, "name": self.name, "url": self.url}
+        if self.color:
+            # 没手动选色时不写这个字段,继续按自动规则配色。
+            data["color"] = self.color
+        return data
 
 
 class TrayApp:
@@ -464,7 +486,10 @@ class TrayApp:
                 "新建图标",
                 "",
                 EXAMPLE_URL,
-                lambda name, url: self.add_folder_icon(name, url, persist=True),
+                None,
+                lambda name, url, color: self.add_folder_icon(
+                    name, url, persist=True, color=color
+                ),
             ),
         )
 
@@ -475,11 +500,12 @@ class TrayApp:
                 "编辑图标",
                 fi.name,
                 fi.url,
-                lambda name, url: self.edit_folder_icon(fi, name, url),
+                fi.color,
+                lambda name, url, color: self.edit_folder_icon(fi, name, url, color),
             ),
         )
 
-    def _show_icon_dialog(self, title, initial_name, initial_url, on_submit):
+    def _show_icon_dialog(self, title, initial_name, initial_url, initial_color, on_submit):
         dialog = tk.Toplevel(self.root)
         dialog.title(title)
         dialog.resizable(False, False)
@@ -510,7 +536,28 @@ class TrayApp:
             url_entry.icursor("end")
             url_entry.select_range(0, "end")
 
-        button_row = len(rows)
+        # 背景颜色:"自动"保持原来的规则(待办橙/华隆红/其它蓝),其余三个颜色手动指定。
+        color_var = tk.StringVar(value=initial_color or "auto")
+        color_row = len(rows)
+        tk.Label(dialog, text="背景颜色:", anchor="w").grid(
+            row=color_row, column=0, sticky="w", padx=10, pady=4
+        )
+        color_frame = tk.Frame(dialog)
+        color_frame.grid(row=color_row, column=1, sticky="w", padx=(0, 10), pady=4)
+        for key, label, _rgb in ICON_COLOR_CHOICES:
+            tk.Radiobutton(
+                color_frame, text=label, value=key, variable=color_var
+            ).pack(side="left", padx=(0, 8))
+        tk.Radiobutton(
+            color_frame, text="自动", value="auto", variable=color_var
+        ).pack(side="left")
+        tk.Label(
+            dialog,
+            text="自动:待办橙色、华隆红色、其它蓝色;手动选择后覆盖自动规则。",
+            anchor="w", fg="#666666",
+        ).grid(row=color_row + 1, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 4))
+
+        button_row = len(rows) + 2
         btn_frame = tk.Frame(dialog)
         btn_frame.grid(row=button_row, column=0, columnspan=2, pady=12)
 
@@ -520,7 +567,8 @@ class TrayApp:
             if not name or not url:
                 messagebox.showerror("错误", "名称和 URL 不能为空", parent=dialog)
                 return
-            on_submit(name, url)
+            color = color_var.get()
+            on_submit(name, url, None if color == "auto" else color)
             dialog.destroy()
 
         def cancel():
@@ -546,10 +594,10 @@ class TrayApp:
 
     # ---- 图标管理 ----
 
-    def add_folder_icon(self, name, url, persist, config_id=None):
+    def add_folder_icon(self, name, url, persist, config_id=None, color=None):
         if config_id is None:
             config_id = str(uuid.uuid4())
-        fi = FolderIcon(self, config_id, name, url)
+        fi = FolderIcon(self, config_id, name, url, color)
         self.folder_icons.append(fi)
         fi.start()
         if persist:
@@ -557,15 +605,22 @@ class TrayApp:
             save_config(self.config)
         return fi
 
-    def edit_folder_icon(self, fi, name, url):
+    def edit_folder_icon(self, fi, name, url, color=None):
         fi.name = name
         fi.url = url
+        fi.color = color if color in ICON_COLOR_RGB else None
         fi.browse_url = None
         fi.icon.title = f"{name}: 加载中..."[:127]
+        # 先按已知的数字用新颜色重画一次,颜色改动不用等下一次网络请求就能看到。
+        fi.icon.icon = make_icon_image(fi._last_text, fi.bg_color)
         for c in self.config["icons"]:
             if c.get("id") == fi.config_id:
                 c["name"] = name
                 c["url"] = url
+                if fi.color:
+                    c["color"] = fi.color
+                else:
+                    c.pop("color", None)
                 break
         else:
             self.config["icons"].append(fi.to_config())
@@ -808,6 +863,7 @@ class TrayApp:
                 item.get("url", ""),
                 persist=False,
                 config_id=item["id"],
+                color=item.get("color"),
             )
         debug_log("所有图标已添加完毕(各自的 icon.run()/轮询线程已经在后台起来了)")
         if needs_save:
