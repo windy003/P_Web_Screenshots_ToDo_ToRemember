@@ -99,8 +99,14 @@
     var SWIPE_THRESHOLD = 50;
     var swipeStart = null;
 
+    // 双指放大之后(页面通过 visualViewport 报告缩放比例),单指拖动是在平移
+    // 放大后的画面,不能再当成"滑动切图"来处理,否则想挪动画面就会跳到别的图。
+    function isPageZoomed() {
+      return !!(window.visualViewport && window.visualViewport.scale > 1.01);
+    }
+
     viewerFull.addEventListener("touchstart", function (e) {
-      if (panel.contains(e.target) || e.touches.length !== 1) {
+      if (panel.contains(e.target) || e.touches.length !== 1 || isPageZoomed()) {
         swipeStart = null;
         return;
       }
@@ -109,7 +115,10 @@
     }, { passive: true });
 
     viewerFull.addEventListener("touchend", function (e) {
-      if (!swipeStart) return;
+      if (!swipeStart || isPageZoomed()) {
+        swipeStart = null;
+        return;
+      }
       var t = e.changedTouches[0];
       var dx = t.clientX - swipeStart.x;
       var dy = t.clientY - swipeStart.y;
