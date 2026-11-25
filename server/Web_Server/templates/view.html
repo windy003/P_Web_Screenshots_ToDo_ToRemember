@@ -55,10 +55,6 @@
     var img = document.getElementById("viewer-img");
     var panel = document.getElementById("floating-panel");
 
-    img.addEventListener("click", function () {
-      overlay.classList.toggle("hidden");
-    });
-
     var filenameBtn = document.getElementById("filename-btn");
     var panelFilename = document.getElementById("panel-filename");
     if (filenameBtn && panelFilename) {
@@ -99,8 +95,123 @@
     var SWIPE_THRESHOLD = 50;
     var swipeStart = null;
 
+    // 双指放大之后(页面通过 visualViewport 报告缩放比例),单指拖动是在平移
+    // 放大后的画面,不能再当成"滑动切图"来处理,否则想挪动画面就会跳到别的图。
+    function isPageZoomed() {
+      return !!(window.visualViewport && window.visualViewport.scale > 1.01);
+    }
+
+    // ---- 双击放大/缩小:双击图片的某个位置就把那里放大,再双击一次还原。
+    // 用 CSS transform 缩放图片本身,不改页面布局,也不会影响悬浮面板的定位。
+    // 放大后单指拖动改为平移画面(见下面的 touchmove),不再触发左右滑动切图。 ----
+    var ZOOM_SCALE = 2.5;
+    var PAN_THRESHOLD = 6;
+    var zoomScale = 1;
+    var zoomX = 0;
+    var zoomY = 0;
+
+    function isImageZoomed() {
+      return zoomScale > 1.01;
+    }
+
+    function applyImageZoom() {
+      img.style.transform =
+        "translate(" + zoomX + "px, " + zoomY + "px) scale(" + zoomScale + ")";
+    }
+
+    // 平移范围限制在图片边界内,避免把画面拖丢,只剩下黑屏。
+    function clampImagePan() {
+      var maxX = Math.max(0, (img.offsetWidth * zoomScale - viewerFull.clientWidth) / 2);
+      var maxY = Math.max(0, (img.offsetHeight * zoomScale - viewerFull.clientHeight) / 2);
+      zoomX = clamp(zoomX, -maxX, maxX);
+      zoomY = clamp(zoomY, -maxY, maxY);
+    }
+
+    // 图片在 .viewer-full 里居中对齐,元素中心和容器中心重合。transform 以
+    // 元素中心为原点,要让双击点(clientX/clientY)在缩放前后停在原地,
+    // 需要平移 (1 - scale) * (双击点 - 容器中心)。
+    function zoomInAt(clientX, clientY) {
+      var rect = viewerFull.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      zoomScale = ZOOM_SCALE;
+      zoomX = (1 - zoomScale) * (clientX - cx);
+      zoomY = (1 - zoomScale) * (clientY - cy);
+      clampImagePan();
+      applyImageZoom();
+    }
+
+    function zoomOut() {
+      zoomScale = 1;
+      zoomX = 0;
+      zoomY = 0;
+      applyImageZoom();
+    }
+
+    function toggleImageZoom(clientX, clientY) {
+      if (isImageZoomed()) {
+        zoomOut();
+      } else {
+        zoomInAt(clientX, clientY);
+      }
+    }
+
+    // ---- 单指/双击识别:单击开关悬浮面板,双击缩放。单击要等一小会儿,
+    // 确认不是双击的第一下之后再执行,否则双击时会顺带把面板开关一次。 ----
+    var DOUBLE_TAP_MS = 280;
+    var DOUBLE_TAP_DIST = 40;
+    var TAP_TOGGLE_DELAY = 250;
+    var lastTapTime = 0;
+    var lastTapX = 0;
+    var lastTapY = 0;
+    var tapToggleTimer = null;
+    var suppressTapUntil = 0;
+
+    img.addEventListener("click", function (e) {
+      // 刚拖动平移过画面,浏览器可能补发一个 click,不要当成点按。
+      if (Date.now() < suppressTapUntil) return;
+      // 已经双指放大了网页本身时,双击交给系统处理,避免两套缩放互相打架。
+      if (isPageZoomed()) return;
+      var now = Date.now();
+      if (now - lastTapTime < DOUBLE_TAP_MS &&
+          Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < DOUBLE_TAP_DIST) {
+        clearTimeout(tapToggleTimer);
+        tapToggleTimer = null;
+        lastTapTime = 0;
+        toggleImageZoom(e.clientX, e.clientY);
+        return;
+      }
+      lastTapTime = now;
+      lastTapX = e.clientX;
+      lastTapY = e.clientY;
+      clearTimeout(tapToggleTimer);
+      tapToggleTimer = setTimeout(function () {
+        overlay.classList.toggle("hidden");
+      }, TAP_TOGGLE_DELAY);
+    });
+
+    var panStart = null;
+
     viewerFull.addEventListener("touchstart", function (e) {
-      if (panel.contains(e.target) || e.touches.length !== 1) {
+      if (panel.contains(e.target) || isPageZoomed()) {
+        swipeStart = null;
+        panStart = null;
+        return;
+      }
+      if (isImageZoomed()) {
+        // 图片已被双击放大:单指拖动平移画面。
+        if (e.touches.length !== 1) {
+          panStart = null;
+          img.classList.remove("panning");
+          return;
+        }
+        var p = e.touches[0];
+        panStart = { x: p.clientX, y: p.clientY, startX: zoomX, startY: zoomY, moved: false };
+        swipeStart = null;
+        return;
+      }
+      panStart = null;
+      if (e.touches.length !== 1) {
         swipeStart = null;
         return;
       }
@@ -108,8 +219,36 @@
       swipeStart = { x: t.clientX, y: t.clientY };
     }, { passive: true });
 
+    viewerFull.addEventListener("touchmove", function (e) {
+      if (!panStart || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - panStart.x;
+      var dy = t.clientY - panStart.y;
+      if (!panStart.moved && Math.hypot(dx, dy) > PAN_THRESHOLD) {
+        panStart.moved = true;
+        img.classList.add("panning");
+      }
+      if (!panStart.moved) return;
+      zoomX = panStart.startX + dx;
+      zoomY = panStart.startY + dy;
+      clampImagePan();
+      applyImageZoom();
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
     viewerFull.addEventListener("touchend", function (e) {
-      if (!swipeStart) return;
+      if (panStart) {
+        var panned = panStart.moved;
+        panStart = null;
+        img.classList.remove("panning");
+        if (panned) suppressTapUntil = Date.now() + 400;
+        swipeStart = null;
+        return;
+      }
+      if (!swipeStart || isPageZoomed()) {
+        swipeStart = null;
+        return;
+      }
       var t = e.changedTouches[0];
       var dx = t.clientX - swipeStart.x;
       var dy = t.clientY - swipeStart.y;
@@ -120,6 +259,12 @@
       } else {
         goToPrev();
       }
+    });
+
+    viewerFull.addEventListener("touchcancel", function () {
+      panStart = null;
+      swipeStart = null;
+      img.classList.remove("panning");
     });
 
     var postponeBtn = document.getElementById("postpone-btn");

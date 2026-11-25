@@ -84,6 +84,12 @@ class GalleryActivity : AppCompatActivity() {
         webView.settings.javaScriptEnabled = true
         // 悬浮控制面板的拖动位置保存在 localStorage 里,需要开启 DOM storage 才能生效。
         webView.settings.domStorageEnabled = true
+        // 网页本身允许缩放(viewport 里没写 user-scalable=no),在 Chrome 里双指就能放大缩小;
+        // 但 WebView 默认关掉了内置缩放手势,不打开的话双指捏合没有任何反应。
+        // 打开内置缩放后又把它自带的 +/- 悬浮按钮关掉,免得挡住画面。
+        webView.settings.setSupportZoom(true)
+        webView.settings.builtInZoomControls = true
+        webView.settings.displayZoomControls = false
         // WebView 默认会把系统"字体大小"(无障碍 fontScale)乘到网页字号上,
         // 而独立的 Chrome 浏览器不会这样处理,导致同一个页面在这里显示得比浏览器里大。
         // 这里用 textZoom 把这个系数抵消掉,让页面始终按 100% 渲染,不受手机字体大小设置影响。

@@ -108,6 +108,9 @@ body.viewer-body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 双击缩放由页面自己的 JS 处理,关掉浏览器/WebView 自带的双击放大,
+     免得两套缩放同时生效。单指平移和双指捏合不受影响。 */
+  touch-action: manipulation;
 }
 
 .viewer-full img {
@@ -121,6 +124,13 @@ body.viewer-body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
+  /* 双击放大/缩小的过渡动画;放大后单指拖动画面时临时去掉,保证跟手。 */
+  transition: transform 0.2s ease;
+  will-change: transform;
+}
+
+.viewer-full img.panning {
+  transition: none;
 }
 
 .overlay-controls {
